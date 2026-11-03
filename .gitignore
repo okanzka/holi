@@ -1,0 +1,10 @@
+# secrets: your Travelpayouts API token stays on your computer
+travelpayouts.key
+.env
+
+# local / OS clutter
+node_modules/
+.DS_Store
+Thumbs.db
+desktop.ini
+_*.html

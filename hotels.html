@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heybe · Hotels</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Pacifico&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏝️</text></svg>">
+<style>
+  .hero{background:linear-gradient(180deg,#5aa9c9 0%,#8fd0d6 40%,#ffd59a 75%,#7fd3cf 100%)}
+  .stars button{min-width:62px}
+  .stay-pill{display:inline-block;font-size:.72rem;font-weight:800;padding:3px 9px;border-radius:999px;background:var(--sun-l);color:#8a5d00;margin-left:6px}
+</style>
+</head>
+<body data-page="hotels">
+<nav class="nav"><div class="wrap">
+  <a class="logo" href="index.html"><span>🌴</span>heybe</a>
+  <ul><li><a class="link" data-page="home" href="index.html">Home</a></li>
+      <li><a class="link" data-page="flights" href="flights.html">✈️ Flights</a></li>
+      <li><a class="link" data-page="hotels" href="hotels.html">🏨 Hotels</a></li>
+      <li><a class="link" data-page="ask" href="assistant.html">✨ Ask</a></li></ul>
+</div></nav>
+
+<header class="hero small"><div class="wrap">
+  <span class="eyebrow">🏝️ Hotel hunter</span>
+  <h1 id="title">Find your <em>home</em> away</h1>
+  <p class="lead" id="sub">Compare 7 hotel sites with your dates filled in, and keep a shortlist of the places you love.</p>
+</div></header>
+
+<main class="wrap lift">
+  <section class="card">
+    <h2><span class="ico">🛎️</span>Your stay</h2>
+    <div class="note" id="sync" style="display:none;margin-bottom:16px"></div>
+    <form id="f" class="grid g-search">
+      <label class="f span-4">Destination (city or area)<input name="city" required placeholder="Barcelona"></label>
+      <label class="f span-2">Check-in around<input type="date" name="ci" required></label>
+      <label class="f span-2">Check-out around<input type="date" name="co" required></label>
+      <label class="f span-4">Flexibility
+        <div class="flex-pills" id="flexPills"><button type="button" data-v="0">Exact</button><button type="button" data-v="1">± 1</button><button type="button" data-v="2">± 2</button><button type="button" data-v="3">± 3</button></div></label>
+      <label class="f span-2">Adults<input type="number" name="adults" min="1" max="16"></label>
+      <label class="f span-2">Children<input type="number" name="children" min="0" max="10"></label>
+      <label class="f span-2">Rooms<input type="number" name="rooms" min="1" max="8"></label>
+      <label class="f span-2">Max / night<input type="number" name="budget" min="0" placeholder="no limit"></label>
+      <label class="f span-4">Stars (Booking.com filter)
+        <div class="flex-pills stars" id="stars"><button type="button" data-v="3">3★</button><button type="button" data-v="4">4★</button><button type="button" data-v="5">5★</button></div></label>
+      <div class="span-12 row end"><button class="btn primary" type="submit">Find stays 🌴</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2><span class="ico">🗓️</span>Stay options</h2>
+    <p class="sub">Each square is a check-in/check-out pair. Weekend nights (Fri & Sat) usually cost more in cities, and the colours reflect that. Click a square to search it.</p>
+    <div class="matrix-wrap"><table class="matrix" id="matrix"></table></div>
+    <div class="legend"><span><i class="c-great"></i>Fewest weekend nights</span><span><i class="c-good"></i>Good</span><span><i class="c-fair"></i>Average</span><span><i class="c-pricey"></i>Weekend-heavy</span><span>★ your dates</span></div>
+  </section>
+
+  <section class="card detail" id="detail">
+    <div class="row"><h2 style="margin:0" id="dTitle"></h2><span class="spacer"></span><button class="btn ocean sm" id="openAll">Open all sites ↗</button></div>
+    <p class="sub" id="dSub" style="margin-top:6px"></p>
+    <div class="sites" id="dSites"></div>
+    <h3 style="margin-top:8px">💖 Save a hotel you like</h3>
+    <form id="hf" class="grid g-search">
+      <label class="f span-4">Hotel name<input name="name" required placeholder="Casa Sol Boutique"></label>
+      <label class="f span-2">Site<select name="site"></select></label>
+      <label class="f span-2">Total price<input type="number" name="price" min="0" required></label>
+      <label class="f span-2">Rating /10<input type="number" name="rating" min="0" max="10" step="0.1"></label>
+      <label class="f span-2">Area<input name="area" placeholder="Gothic Quarter"></label>
+      <label class="f span-8">Link (optional)<input name="link" type="url" placeholder="https://…"></label>
+      <div class="span-4 row end" style="align-self:end"><button class="btn primary" type="submit">Add to shortlist</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="row"><h2 style="margin:0"><span class="ico">🏆</span>Your shortlist</h2><span class="spacer"></span>
+      <select id="sortBy" style="width:auto"><option value="price">Cheapest per night</option><option value="value">Best value (rating ÷ price)</option><option value="rating">Highest rated</option></select></div>
+    <p class="sub" style="margin-top:6px" id="slSub"></p>
+    <div class="list" id="shortlist"></div>
+  </section>
+</main>
+<footer><div class="s">heybe</div>Sun, sand &amp; a good pillow 🐚</footer>
+
+<script src="js/common.js"></script>
+<script src="js/hotels.js"></script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heybe · Holiday Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Pacifico&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌴</text></svg>">
+</head>
+<body data-page="home">
+<nav class="nav"><div class="wrap">
+  <a class="logo" href="index.html"><span>🌴</span>heybe</a>
+  <ul><li><a class="link" data-page="home" href="index.html">Home</a></li>
+      <li><a class="link" data-page="flights" href="flights.html">✈️ Flights</a></li>
+      <li><a class="link" data-page="hotels" href="hotels.html">🏨 Hotels</a></li>
+      <li><a class="link" data-page="ask" href="assistant.html">✨ Ask</a></li></ul>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <span class="eyebrow">☀️ Your holiday, packed</span>
+  <h1>Where to <em>next</em>, traveler?</h1>
+  <p class="lead">Pick your week, tell us how flexible you are, and we'll lay out every date combo, point you to the best-looking deals, and open them on all the big booking sites at once.</p>
+  <div class="countdown" id="countdown"></div>
+</div></header>
+
+<main class="wrap lift">
+  <section class="card">
+    <h2><span class="ico">🧳</span>Plan a trip</h2>
+    <p class="sub">This trip is shared with the Flights and Hotels pages.</p>
+    <form id="tripForm" class="grid g-search">
+      <label class="f span-3">From<input name="from" data-ac data-anywhere required placeholder="City, airport or code (e.g. Nürnberg)"></label>
+      <button type="button" class="swap" id="swap" title="Swap" style="grid-column:span 1">⇄</button>
+      <label class="f span-3">To<input name="to" data-ac data-anywhere required placeholder="🌍 Anywhere, or a city"></label>
+      <label class="f span-2">Leave around<input type="date" name="start" required></label>
+      <label class="f span-3">Come back around<input type="date" name="end" required></label>
+      <label class="f span-6">How flexible are you?
+        <div class="flex-pills" id="flexPills">
+          <button type="button" data-v="0">Exact dates</button><button type="button" data-v="1">± 1 day</button>
+          <button type="button" data-v="2">± 2 days</button><button type="button" data-v="3">± 3 days</button><button type="button" data-v="4">± 4 days</button>
+        </div></label>
+      <label class="f span-2">Adults<input type="number" name="adults" min="1" max="9"></label>
+      <label class="f span-2">Children<input type="number" name="children" min="0" max="8"></label>
+      <label class="f span-2">Cabin<select name="cabin">
+        <option value="economy">Economy</option><option value="premium_economy">Premium economy</option>
+        <option value="business">Business</option><option value="first">First</option></select></label>
+      <div class="span-12 row end">
+        <a class="btn ghost" href="hotels.html" id="goHotels">🏨 Hotels only</a>
+        <button class="btn primary" type="submit">Find my flights ✈️</button>
+      </div>
+    </form>
+  </section>
+
+  <div class="tiles">
+    <a class="tile t1" href="flights.html"><span class="big">✈️</span><h3>Flight finder</h3><p>Live prices to every destination from your airport, a flexible date grid, and 8 booking sites.</p></a>
+    <a class="tile t2" href="hotels.html"><span class="big">🏝️</span><h3>Hotel hunter</h3><p>Shift your stay, compare 7 hotel sites, keep a shortlist with real prices.</p></a>
+    <a class="tile t3" href="assistant.html"><span class="big">✨</span><h3>Ask Claude</h3><p>“Bana öneride bulun”: it checks live fares and recommends where to go.</p></a>
+  </div>
+
+  <section class="card" id="tips" style="margin-top:28px">
+    <h2><span class="ico">💡</span>How to travel for less</h2>
+    <div class="tips">
+      <div class="tip"><span class="e">📅</span><b>Fly mid-week</b><p>Tuesday and Wednesday departures are often the cheapest. Friday and Sunday are usually the priciest.</p></div>
+      <div class="tip"><span class="e">🔀</span><b>Flex by a day or two</b><p>Moving one day either side can change fares a lot. That's what the date grid is for.</p></div>
+      <div class="tip"><span class="e">🕵️</span><b>Compare sites</b><p>Meta-search sites (Google, Skyscanner, Kayak) find different fares than agencies like Kiwi or Trip.com.</p></div>
+      <div class="tip"><span class="e">🏷️</span><b>Write prices down</b><p>Type each fare you see into the planner. It ranks your real options for you.</p></div>
+    </div>
+  </section>
+</main>
+<footer><div class="s">heybe</div>Pack light, travel far 🌊</footer>
+
+<script src="js/airports.js"></script>
+<script src="js/common.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+  const f=document.getElementById('tripForm'), t=H.trip();
+  setAirport(f.from,t.from); setAirport(f.to,t.to);
+  f.start.value=t.start; f.end.value=t.end; f.adults.value=t.adults; f.children.value=t.children; f.cabin.value=t.cabin;
+  let flex=t.flex;
+  const pills=[...document.querySelectorAll('#flexPills button')];
+  const paint=()=>pills.forEach(b=>b.classList.toggle('on',+b.dataset.v===flex));
+  pills.forEach(b=>b.onclick=()=>{flex=+b.dataset.v;paint();}); paint();
+  document.getElementById('swap').onclick=()=>{ const a=H.codeOf(f.from), b=H.codeOf(f.to); setAirport(f.from,b); setAirport(f.to,a); };
+  f.start.onchange=()=>{ if(!f.end.value||f.end.value<=f.start.value) f.end.value=H.fmt(H.add(H.parse(f.start.value),7)); };
+
+  const collect=()=>{ const to=H.codeOf(f.to), from=H.codeOf(f.from); if(!from||!to){ H.toast("Pick airports from the list"); return null; } if(from==="ANY"&&to==="ANY"){ H.toast("Pick a city or country on at least one side"); return null; }
+    return H.setTrip({from,to,city:H.hotelCity(to),
+      start:f.start.value,end:f.end.value,flex,adults:+f.adults.value||1,children:+f.children.value||0,cabin:f.cabin.value,chosen:null}); };
+  f.onsubmit=e=>{ e.preventDefault(); if(f.end.value<=f.start.value){H.toast('Return must be after departure');return;} if(collect()) location.href='flights.html'; };
+  document.getElementById('goHotels').onclick=e=>{ if(f.start.value&&f.end.value>f.start.value) collect(); };
+
+  // countdown
+  const cd=document.getElementById('countdown');
+  const tick=()=>{ const s=H.parse(H.trip().start); const ms=s-new Date();
+    if(ms<=0){ cd.innerHTML='<div><b>🎉</b><span>Bon voyage!</span></div>'; return; }
+    const d=Math.floor(ms/864e5), h=Math.floor(ms/36e5)%24, m=Math.floor(ms/6e4)%60;
+    cd.innerHTML=`<div><b>${d}</b><span>days</span></div><div><b>${h}</b><span>hours</span></div><div><b>${m}</b><span>mins</span></div>
+      <div style="text-align:left"><b style="font-size:1.1rem">${H.esc(H.trip().to==='ANY'?'Somewhere sunny':H.cityOf(H.trip().to))}</b><span>until take-off</span></div>`; };
+  tick(); setInterval(tick,30000);
+});
+</script>
+</body>
+</html>
