@@ -49,13 +49,20 @@ const STAYS = {
   isHostel(p){ return /hostel|backpack|dorm|bunk|auberge|albergue|ostello|jugendherberge|youth/i.test((p.name||'')+' '+(p.description||'')+' '+(p.type||'')); },
   /* 5–6 suggestions: cheapest well-rated ones, mixing hostels and hotels when "both" */
   pick6(props,kind,nights){
-    const L=(props||[]).filter(p=>(p.total||p.night)&&(p.rating==null||p.rating>=3.5)).map(p=>({...p,hostel:STAYS.isHostel(p),
-      tot:p.total||p.night*nights}));
-    const hs=L.filter(p=>p.hostel).sort((a,b)=>a.tot-b.tot), ht=L.filter(p=>!p.hostel).sort((a,b)=>a.tot-b.tot);
-    if(kind==='hostel') return hs.slice(0,6);
-    if(kind==='hotel') return ht.slice(0,6);
-    const mix=[...hs.slice(0,3),...ht.slice(0,6)].slice(0,6);
-    return mix.length<6?[...mix,...hs.slice(3)].slice(0,6):mix.sort((a,b)=>a.tot-b.tot);
+    const all=(props||[]).filter(p=>p.rating==null||p.rating>=3.5).map(p=>({...p,hostel:STAYS.isHostel(p),tot:p.total||(p.night?p.night*nights:null)}))
+      .filter(p=>kind==='hostel'?p.hostel:kind==='hotel'?!p.hostel:true);
+    const priced=all.filter(p=>p.tot), unpriced=all.filter(p=>!p.tot).sort((a,b)=>(b.rating||0)-(a.rating||0));
+    const hs=priced.filter(p=>p.hostel).sort((a,b)=>a.tot-b.tot), ht=priced.filter(p=>!p.hostel).sort((a,b)=>a.tot-b.tot);
+    let list=kind==='both'?[...hs.slice(0,3),...ht].slice(0,6):[...hs,...ht].slice(0,6);
+    if(kind==='both'&&list.length<6) list=[...list,...hs.slice(3)].slice(0,6);
+    list.sort((a,b)=>a.tot-b.tot);
+    // Google often has no rate for some places on given dates: fill up with the best-rated of those
+    if(list.length<6){
+      const h2=unpriced.filter(p=>p.hostel), o2=unpriced.filter(p=>!p.hostel);
+      const extra=kind==='both'?[...h2.slice(0,2),...o2,...h2.slice(2)]:unpriced;
+      list=[...list,...extra.slice(0,6-list.length).map(p=>({...p,noPrice:true}))];
+    }
+    return list;
   },
   links(c,adults){
     const q=encodeURIComponent(c.city);
@@ -145,8 +152,16 @@ async function fillSuggestions(grid,c,P,choose){
       <div class="st-img"${h.image?` style="background-image:url('${H.esc(h.image)}'),linear-gradient(135deg,var(--lagoon),var(--sun-l))"`:''}><span class="st-type">${h.hostel?'🛏️ Hostel':'🏨 Hotel'}</span></div>
       <div class="st-body"><b class="st-name">${H.esc(h.name)}</b>
         <div class="s">${h.stars?'★'.repeat(Math.min(5,h.stars))+' · ':''}${h.rating?`⭐ ${(+h.rating).toFixed(1)}${h.reviews?` (${h.reviews.toLocaleString('en-US')})`:''}`:'no rating yet'}</div>
-        <div class="st-price"><b>${H.money(h.tot,cur)}</b><span>${H.money(h.tot/c.nights,cur)} / night${h.source?` · ${H.esc(h.source)}`:''}</span></div>
-        <div class="row" style="gap:6px;margin-top:8px"><button class="btn primary sm" data-i="${i}">Choose</button>${h.link?`<a class="btn ghost sm" href="${H.esc(h.link)}" target="_blank" rel="noopener">View ↗</a>`:''}</div></div></div>`).join('');
-  grid.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ const h=list[+b.dataset.i];
-    choose({name:h.name,total:Math.round(h.tot),link:h.link||'',rating:h.rating,hostel:h.hostel,image:h.image}); });
+        ${h.noPrice
+          ?`<div class="st-price"><span>No price for these dates on Google. Check it, then enter the total:</span></div>
+            <div class="row" style="gap:6px;margin-top:6px"><input type="number" min="0" step="1" placeholder="Total €" data-p="${i}" style="width:110px;padding:8px 10px">
+            <button class="btn primary sm" data-i="${i}">Choose</button><a class="btn ghost sm" href="${H.esc(h.link||`https://www.google.com/travel/search?q=${encodeURIComponent(h.name+' '+c.city)}`)}" target="_blank" rel="noopener">Check price ↗</a></div>`
+          :`<div class="st-price"><b>${H.money(h.tot,cur)}</b><span>${H.money(h.tot/c.nights,cur)} / night${h.source?` · ${H.esc(h.source)}`:''}</span></div>
+            <div class="row" style="gap:6px;margin-top:8px"><button class="btn primary sm" data-i="${i}">Choose</button>${h.link?`<a class="btn ghost sm" href="${H.esc(h.link)}" target="_blank" rel="noopener">View ↗</a>`:''}</div>`}
+      </div></div>`).join('');
+  grid.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i, h=list[i];
+    let total=h.tot;
+    if(h.noPrice){ const inp=grid.querySelector(`[data-p="${i}"]`); total=parseFloat(inp.value);
+      if(!(total>=0)){ H.toast('Enter the total price you found first'); inp.focus(); return; } }
+    choose({name:h.name,total:Math.round(total),link:h.link||'',rating:h.rating,hostel:h.hostel,image:h.image}); });
 }

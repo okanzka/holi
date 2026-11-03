@@ -88,6 +88,11 @@
 <script src="js/common.js"></script>
 <script src="js/stays.js"></script>
 <script src="js/hotels.js"></script>
-<script>document.addEventListener('DOMContentLoaded',()=>renderStayWizard(document.getElementById('stayWizard')));</script>
+<script>
+  const showWizard=()=>renderStayWizard(document.getElementById('stayWizard'));
+  document.addEventListener('DOMContentLoaded',showWizard);
+  window.addEventListener('hashchange',showWizard);                                   // already on this page
+  window.addEventListener('storage',e=>{ if(e.key==='heybe.stayPlan') showWizard(); });  // plan changed in another tab
+</script>
 </body>
 </html>

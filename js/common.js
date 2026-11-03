@@ -21,7 +21,14 @@ const H = {
     const def={ from:'NUE', to:'ANY', city:'', tripType:'rt',
       start:H.fmt(H.add(today,30)), end:H.fmt(H.add(today,37)), flex:2, nearby:true,
       adults:2, children:0, cabin:'economy', rooms:1, currency:'EUR', chosen:null, minNights:0 };
-    return Object.assign(def, H.load('trip',{}));
+    const t=Object.assign(def, H.load('trip',{}));
+    // a saved trip whose dates have passed moves to a week from today, keeping its length
+    if(H.parse(t.start)<today){
+      const len=Math.max(1,H.diff(H.parse(t.start),H.parse(t.end)||H.parse(t.start)));
+      t.start=H.fmt(H.add(today,7)); t.end=H.fmt(H.add(today,7+len)); t.chosen=null;
+      H.save('trip',t);
+    }
+    return t;
   },
   setTrip(patch){ const t=Object.assign(H.trip(),patch); H.save('trip',t); return t; },
 

@@ -456,9 +456,10 @@ function renderCal(){
   if(H.isDealMode(T)) return;
   const route=`${T.from}-${T.to}-${T.currency}`;
   if(cal.route!==route){ cal.route=route; cal.outAnchor=T.start; cal.backAnchor=T.end; cal.outMonth=T.start.slice(0,7); cal.backMonth=T.end.slice(0,7); }
-  // keep the selected day in view
-  if(Math.abs(H.diff(H.parse(cal.outAnchor),H.parse(T.start)))>3) cal.outAnchor=T.start;
-  if(Math.abs(H.diff(H.parse(cal.backAnchor),H.parse(T.end)))>3) cal.backAnchor=T.end;
+  // bring the selected day into view only when the selection itself changes,
+  // so the ‹ › week arrows can still browse away from it
+  if(cal.lastStart!==T.start){ if(Math.abs(H.diff(H.parse(cal.outAnchor),H.parse(T.start)))>3) cal.outAnchor=T.start; cal.outMonth=T.start.slice(0,7); cal.lastStart=T.start; }
+  if(cal.lastEnd!==T.end){ if(Math.abs(H.diff(H.parse(cal.backAnchor),H.parse(T.end)))>3) cal.backAnchor=T.end; cal.backMonth=T.end.slice(0,7); cal.lastEnd=T.end; }
   const rt=T.tripType==='rt';
   document.querySelectorAll('#calView button').forEach(b=>b.classList.toggle('on',b.dataset.v===cal.view));
   $('#legOutRoute').textContent=`${H.cityOf(T.from)} (${T.from}) → ${H.cityOf(T.to)} (${T.to})`;
