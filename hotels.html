@@ -30,6 +30,9 @@
 </div></header>
 
 <main class="wrap lift">
+  <!-- step-by-step stay planner, filled from a flight option -->
+  <section class="card hidden" id="stayWizard"></section>
+
   <section class="card">
     <h2><span class="ico">🛎️</span>Your stay</h2>
     <div class="note" id="sync" style="display:none;margin-bottom:16px"></div>
@@ -81,7 +84,10 @@
 </main>
 <footer><div class="s">heybe</div>Sun, sand &amp; a good pillow 🐚</footer>
 
+<script src="js/airports.js"></script>
 <script src="js/common.js"></script>
+<script src="js/stays.js"></script>
 <script src="js/hotels.js"></script>
+<script>document.addEventListener('DOMContentLoaded',()=>renderStayWizard(document.getElementById('stayWizard')));</script>
 </body>
 </html>

@@ -128,7 +128,8 @@ function renderAnywhere(){
       <div class="meta">≈ ${H.money(d.total,d.cur)} for ${pax()} traveller${pax()>1?'s':''}</div>
       <div class="actions">
         <a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(dealBook(d))}">Book${d.src==='tp'?'':' on Ryanair'} ↗</a>
-        <button class="btn ghost sm" data-route="${d.dest}" data-origin="${d.origin}">📅 All dates</button></div></div>`).join('');
+        <button class="btn ghost sm" data-route="${d.dest}" data-origin="${d.origin}">📅 All dates</button>
+        <button class="btn ghost sm" data-hotel="${d.key}">🏨 Stays</button></div></div>`).join('');
   renderDealList();
   bindDealButtons($('#anyPicks'));
 }
@@ -166,7 +167,7 @@ function renderDealList(){
         <a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(dealBook(d))}">Book ↗</a>
         <a class="btn ghost sm" target="_blank" rel="noopener" title="Compare all airlines on Google Flights" href="${H.esc(FLIGHT_SITES[0].url({from:d.origin,to:d.dest,dep:d.dep,ret:d.ret,adults:T.adults,children:T.children,cabin:T.cabin}))}">Compare ↗</a>
         <button class="btn ghost sm" data-route="${d.dest}" data-origin="${d.origin}" title="See every date combination">📅</button>
-        <button class="btn ghost sm" data-hotel="${d.key}" title="Find hotels for these dates">🏨</button></div></div>`).join('');
+        <button class="btn ghost sm" data-hotel="${d.key}" title="Plan where to stay on these dates">🏨</button></div></div>`).join('');
   bindDealButtons($('#deals'));
 }
 
@@ -176,9 +177,10 @@ function bindDealButtons(root){
     H.setTrip({from:org,to:code,city:H.hotelCity(code)}); selected=null; render(); window.scrollTo({top:0,behavior:'smooth'});
   });
   root.querySelectorAll('[data-hotel]').forEach(b=>b.onclick=()=>{
-    const d=any.deals.find(x=>x.key===b.dataset.hotel);
-    H.setTrip({city:d.destCity,chosen:{ci:d.dep,co:d.ret||H.fmt(H.add(H.parse(d.dep),Math.max(1,H.diff(H.parse(T.start),H.parse(T.end)))))}});
-    location.href='hotels.html';
+    const d=any.deals.find(x=>x.key===b.dataset.hotel); if(!d) return;
+    const ci=String(d.outArr||d.outDep).slice(0,10), co=d.ret||H.fmt(H.add(H.parse(d.dep),Math.max(1,H.diff(H.parse(T.start),H.parse(T.end)))));
+    H.setTrip({city:d.destCity,chosen:{ci,co}});
+    STAYS.start({cities:[STAYS.city(d.dest,ci,co)],flightPP:d.pp,cur:d.cur,label:`${d.origin} → ${d.destCity}`});
   });
 }
 
@@ -361,16 +363,24 @@ function renderMulti(){
       <h3>${it.stops.map(H.esc).join(' → ')}</h3>${chain(it)}
       <div class="price">${priceFmt(it.total,it.cur)}<span class="hint"> / person</span></div>
       <div class="meta">≈ ${priceFmt(it.total*pax(),it.cur)} for ${pax()} traveller${pax()>1?'s':''} · ${nightsOf(it)} nights · ${H.short(H.parse(it.start))} – ${H.short(H.parse(it.end))}</div>
-      <div class="mc-legs">${it.legs.map(legLine).join('')}</div></div>`).join('');
+      <div class="mc-legs">${it.legs.map(legLine).join('')}</div>
+      <div class="actions"><button class="btn primary sm" data-mcstay="p${i}">🏨 Plan stays</button></div></div>`).join('');
+  mcShown.p=picks; bindMcStays($('#mcPicks'));
   renderMcList(L);
 }
 function renderMcList(L){
   L=L||mcSorted();
   if(!L.length){ $('#mcList').innerHTML='<div class="empty">Nothing matches these filters.</div>'; return; }
-  $('#mcList').innerHTML=`<p class="hint">${L.length} route${L.length>1?'s':''}</p>`+L.slice(0,60).map(it=>`<div class="deal mc-row">
+  $('#mcList').innerHTML=`<p class="hint">${L.length} route${L.length>1?'s':''}</p>`+L.slice(0,60).map((it,i)=>`<div class="deal mc-row">
       <div style="grid-column:1/3">${chain(it)}<div class="mc-legs compact">${it.legs.map(legLine).join('')}</div></div>
-      <div class="amt">${priceFmt(it.total,it.cur)}<small>per person · ${nightsOf(it)} nights<br>≈ ${priceFmt(it.total*pax(),it.cur)} total</small></div></div>`).join('');
+      <div class="amt">${priceFmt(it.total,it.cur)}<small>per person · ${nightsOf(it)} nights<br>≈ ${priceFmt(it.total*pax(),it.cur)} total</small>
+        <button class="btn ghost sm" style="margin-top:6px" data-mcstay="l${i}">🏨 Stays</button></div></div>`).join('');
+  mcShown.l=L; bindMcStays($('#mcList'));
 }
+const mcShown={p:[],l:[]};
+function bindMcStays(root){ root.querySelectorAll('[data-mcstay]').forEach(b=>b.onclick=()=>{
+  const k=b.dataset.mcstay, it=mcShown[k[0]][+k.slice(1)]; if(!it) return;
+  STAYS.start({cities:STAYS.fromLegs(it.legs),flightPP:it.total,cur:it.cur,label:[it.legs[0].from,...it.stops,it.legs[it.legs.length-1].to].join(' → ')}); }); }
 
 /* =====================================================================
    FARE CALENDAR — week strip / month grid with the lowest fare per day
@@ -483,7 +493,9 @@ function renderCal(){
       ${pp!=null&&allRyan?`<a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(RYANAIR.bookUrl(q))}">Book on Ryanair ↗</a>`:pp!=null?[o,b].map(legBtn).join(''):''}
       <a class="btn ghost sm" target="_blank" rel="noopener" href="${H.esc(FLIGHT_SITES[0].url(q))}">Google Flights ↗</a>
       <a class="btn ghost sm" target="_blank" rel="noopener" href="${H.esc(FLIGHT_SITES[1].url(q))}">Skyscanner ↗</a>
+      ${rt?'<button class="btn ghost sm" id="calStays">🏨 Stays</button>':''}
     </div>`;
+  const cs=$('#calStays'); if(cs) cs.onclick=()=>STAYS.start({cities:[STAYS.city(T.to,(okO&&o.arr?String(o.arr):T.start).slice(0,10),T.end)],flightPP:pp,cur,label:`${T.from} → ${H.cityOf(T.to)}`});
 }
 
 /* =====================================================================
