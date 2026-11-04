@@ -119,7 +119,7 @@ server.on('error', e => {
     setTimeout(() => process.exit(0), 1500);
   } else { console.error(e); process.exit(1); }
 });
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, process.env.HOST || '127.0.0.1', () => {
   console.log(`\n  🌴 Heybe is running:  ${SITE}\n`);
   console.log(token() ? '  ✅ Travelpayouts token found: all airlines enabled' : '  ⚠️  No token found in travelpayouts.key: only Ryanair prices will show');
   console.log('\n  Keep this window open while you use the site. Press Ctrl+C to stop.\n');
