@@ -55,7 +55,8 @@ const H = {
 /* IATA airline codes → names (square logos from images.kiwi.com, pics.avs.io as fallback) */
 const AIRLINES={FR:'Ryanair',RK:'Ryanair UK',AL:'Malta Air (Ryanair)',RR:'Buzz (Ryanair)',OE:'Lauda Europe (Ryanair)',
   W6:'Wizz Air',PC:'Pegasus',XQ:'SunExpress',TK:'Turkish Airlines',EW:'Eurowings',LH:'Lufthansa',U2:'easyJet',DE:'Condor',VY:'Vueling',
-  VF:'AJet',GQ:'Sky Express',CA:'Air China',W4:'Wizz Air Malta',EI:'Aer Lingus',SK:'SAS',AZ:'ITA Airways',LO:'LOT',OU:'Croatia Airlines',JU:'Air Serbia',FZ:'flydubai',QR:'Qatar Airways',EK:'Emirates',KK:'AtlasGlobal',X3:'TUIfly',BY:'TUI',HV:'Transavia',TO:'Transavia France',V7:'Volotea',EN:'Air Dolomiti','4U':'Germanwings',OS:'Austrian',LX:'SWISS',KL:'KLM',AF:'Air France',BA:'British Airways',IB:'Iberia',A3:'Aegean',TP:'TAP Portugal'};
+  VF:'AJet',GQ:'Sky Express',CA:'Air China',W4:'Wizz Air Malta',EI:'Aer Lingus',SK:'SAS',AZ:'ITA Airways',LO:'LOT',OU:'Croatia Airlines',JU:'Air Serbia',FZ:'flydubai',QR:'Qatar Airways',EK:'Emirates',KK:'AtlasGlobal',X3:'TUIfly',BY:'TUI',V7:'Volotea',EN:'Air Dolomiti','4U':'Germanwings',OS:'Austrian',LX:'SWISS',KL:'KLM',AF:'Air France',BA:'British Airways',IB:'Iberia',A3:'Aegean',TP:'TAP Portugal',
+  EY:'Etihad Airways',UX:'Air Europa',SN:'Brussels Airlines',BT:'airBaltic',FB:'Bulgaria Air',RO:'TAROM',SU:'Aeroflot',MS:'EgyptAir',AT:'Royal Air Maroc',ET:'Ethiopian Airlines',SV:'Saudia',G9:'Air Arabia',J2:'Azerbaijan Airlines',PS:'UIA',H4:'HiSky',D8:'Norwegian',DY:'Norwegian',BJ:'Nouvelair',TU:'Tunisair',OR:'TUI'};
 
 /* ---------- airport database + search ---------- */
 const AP = (()=>{
@@ -91,12 +92,14 @@ const AP = (()=>{
         else if(n.length>=4&&c.names.some(x=>x.includes(n))) out.push([7,c]);
       }
       for(const a of list){
-        let s=-1;
-        if(n.length===3 && a.code.toLowerCase()===n) s=0;
-        else if(a.ncity.startsWith(n)||a.nkw.split(',').some(k=>k.trim().startsWith(n))) s=1;
+        let s=null;
+        if(a.ncity===n) s=-1/6;   // exact city name ("Kos") beats an airport code that happens to match
+        else if(n.length===3 && a.code.toLowerCase()===n) s=0;
+        else if(a.ncity.startsWith(n)) s=1;
+        else if(a.nkw.split(',').some(k=>k.trim().startsWith(n))) s=1.5;   // keyword-only ("Palmaseca") ranks below a city
         else if(a.nname.startsWith(n)) s=2;
         else if(a.nall.includes(n)) s=3;
-        if(s>=0) out.push([s*3+rank[a.size],a]);
+        if(s!==null) out.push([s*3+rank[a.size]-(a.nname.includes(n)?0.1:0),a]);   // tie: Venice -> VCE before TSF
       }
       return out.sort((x,y)=>x[0]-y[0]).slice(0,limit).map(x=>x[1]);
     },

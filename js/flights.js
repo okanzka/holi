@@ -84,7 +84,7 @@ async function loadAnywhere(){
     d.fit=Math.abs(H.diff(s,H.parse(d.dep)))+(d.ret?Math.abs(H.diff(e,H.parse(d.ret))):0);
     d.total=d.pp*pax(); return d; });
   any.origins=origins; any.loading=false;
-  if(!any.deals.length&&failed===origins.length) any.error='Could not reach Ryanair. Check your internet connection and try again.';
+  if(!any.deals.length&&failed===origins.length) any.error='Could not load fares. Check your internet connection and try again.';
   renderAnywhere();
 }
 
@@ -108,7 +108,7 @@ function renderAnywhere(){
     ? `${all.length} option${all.length>1?'s':''}${hidden?` (${hidden} hidden by the visa filter)`:''} found from ${origNames}${T.to!=='ANY'?' to '+H.cityOf(T.to):''}, leaving ${H.short(H.parse(r.outFrom))}–${H.short(H.parse(r.outTo))}${T.tripType==='rt'?`, returning ${H.short(H.parse(r.inFrom))}–${H.short(H.parse(r.inTo))}`:''}. Prices per person.`
     : '';
   if(!all.length){
-    $('#anyPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">No Ryanair flights from ${H.esc(origNames)}${T.to!=='ANY'?' to '+H.esc(H.cityOf(T.to)):''} in this window. ${T.nearby||fromCountry?'':'Tick <b>Also search nearby airports</b>, or '}use the all-airline sites below. 👇</div>`;
+    $('#anyPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">No flights found from ${H.esc(origNames)}${T.to!=='ANY'?' to '+H.esc(H.cityOf(T.to)):''} in this window. ${T.nearby||fromCountry?'':'Tick <b>Also search nearby airports</b>, or '}use the all-airline sites below. 👇</div>`;
     $('#deals').innerHTML=''; return; }
 
   // top 3 picks: cheapest, then cheapest that's closest to your dates, then a "long stay" value pick
@@ -220,7 +220,7 @@ function combos(){
   }
   return out;
 }
-const shiftText=c=>{ const f=n=>n===0?'on plan':(n>0?'+':'')+n+'d'; return c.ret?`leave ${f(c.dOff)}, return ${f(c.rOff)}`:`${f(c.dOff)} from plan`; };
+const shiftText=c=>{ const f=n=>n===0?'on plan':(n>0?'+':'')+n+'d'; return c.ret?`leave ${f(c.dOff)}, return ${f(c.rOff)}`:(c.dOff?`${f(c.dOff)} from plan`:'on plan'); };
 
 function renderRoute(){
   const C=combos(), hasLive=C.some(c=>c.liveTotal!=null);
@@ -229,9 +229,9 @@ function renderRoute(){
   const priced=C.filter(c=>c.best).sort((a,b)=>a.best.p-b.best.p), est=C.filter(c=>!c.best).sort((a,b)=>a.score-b.score);
   const picks=priced.slice(0,3);
   for(const c of est){ if(picks.length>=3) break; if(picks.filter(p=>!p.best).some(p=>p.ds===c.ds||p.rs===c.rs)) continue; picks.push(c); }
-  $('#picksSub').textContent = live.loading ? 'Checking live Ryanair prices…'
-    : priced.length ? `${C.length} date combinations checked. ${hasLive?'Ryanair flies this route, so these are real prices':'Ranked by the fares you saved'}${picks.length>priced.length?', topped up with estimates':''}.`
-    : `${C.length} date combinations checked. Ryanair doesn't fly this route, so these are estimates. Open the sites and save what you find.`;
+  $('#picksSub').textContent = live.loading ? 'Checking live prices…'
+    : priced.length ? `${C.length} date combinations checked. ${hasLive?'These are real fares from the airlines':'Ranked by the fares you saved'}${picks.length>priced.length?', topped up with estimates':''}.`
+    : `${C.length} date combinations checked. No fares found for these dates, so these are estimates. Open the sites and save what you find.`;
   if(!C.length){ $('#picks').innerHTML='<div class="empty" style="grid-column:1/-1">No valid date combinations. Dates must be in the future.</div>'; }
   else $('#picks').innerHTML=picks.map((c,i)=>{
     const t=tier(c.score);
@@ -278,7 +278,7 @@ function showDetail(c,hasLive){
   const o=opts(c.ds,c.rs), sites=hasLive?[RY_SITE,...FLIGHT_SITES]:FLIGHT_SITES;
   $('#dTitle').innerHTML=`✈️ ${H.nice(c.dep)}${c.ret?' → '+H.nice(c.ret):''}`;
   $('#dSub').textContent=`${T.from} → ${T.to}${c.ret?' · '+c.nights+' nights':''} · ${shiftText(c)}`+
-    (c.liveTotal!=null?` · Ryanair live: ${H.money(c.livePP,c.liveCur)} pp, ≈ ${H.money(c.liveTotal,c.liveCur)} total`:` · estimate: ${TIER_LABEL[tier(c.score)].toLowerCase()}`);
+    (c.liveTotal!=null?` · live fare: ${H.money(c.livePP,c.liveCur)} pp, ≈ ${H.money(c.liveTotal,c.liveCur)} total`:` · estimate: ${TIER_LABEL[tier(c.score)].toLowerCase()}`);
   $('#dSites').innerHTML=siteButtons(sites,o);
   $('#fSite').innerHTML=sites.map(s=>`<option>${s.name}</option>`).join('')+'<option>Airline website</option><option>Other</option>';
   $('#fPrice').value=c.fare?c.fare.price:''; $('#fNote').value=c.fare?c.fare.note||'':''; if(c.fare) $('#fSite').value=c.fare.site;
@@ -555,6 +555,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(tripType==='via'&&(from==='ANY'||H.isCountry(from))){ H.toast('Pick your home airport in From (e.g. NUE)'); f.from.focus(); return; }
     if(tripType==='mc'&&H.isCountry(from)){ H.toast('Multi-city needs a home airport (e.g. NUE), not a whole country'); f.from.focus(); return; }
     if(!to&&tripType!=='mc'){ H.toast('Pick a destination, or choose 🌍 Anywhere'); f.to.focus(); return; }
+    if(!f.start.value||f.start.value<H.fmt(new Date())){ H.toast('Pick a departure date from today on'); f.start.focus(); return; }
     if(tripType!=='ow'&&f.end.value<=f.start.value){ H.toast('Return must be after departure'); return; }
     let viaPatch={};
     if(tripType==='via'){

@@ -82,7 +82,8 @@ function renderStayWizard(box){
   if(!P){ box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
   const title=document.getElementById('title');
-  if(title) title.innerHTML=`Stays for <em>${H.esc(P.cities.map(c=>c.city).join(' & '))}</em>`;
+  // only when the stay planner was opened on purpose; a plain hotel search keeps its own city in the title
+  if(title&&location.hash==='#stays') title.innerHTML=`Stays for <em>${H.esc(P.cities.map(c=>c.city).join(' & '))}</em>`;
   const n=P.cities.length, step=Math.min(P.step||0,n), done=P.picks.filter(Boolean).length;
   const money=(v)=>H.money(v,P.cur), pax=(P.adults||1)+(P.children||0);
   const stepChips=P.cities.map((c,i)=>{ const pk=P.picks[i];
