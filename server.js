@@ -35,43 +35,44 @@ const TYPES = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; char
 
 function send(res, status, body, type){ res.writeHead(status, { 'Content-Type': type || 'application/json', 'Cache-Control': 'no-store' }); res.end(body); }
 
-async function proxy(req, res, url){
-  const apiPath = url.pathname.slice(3);                                  // strip "/tp"
-  if (apiPath === '/health') return send(res, 200, JSON.stringify({ ok: true, token: !!token(), hotels: !!serpKey() }));
-  if (!ALLOWED.includes(apiPath)) return send(res, 404, JSON.stringify({ error: 'not allowed' }));
+/* the request handlers return {status, body} so mcp/holi-mcp.js can reuse them without HTTP */
+const out = (status, obj) => ({ status, body: typeof obj === 'string' ? obj : JSON.stringify(obj) });
+
+async function tpGet(apiPath, search){                                    // apiPath without the "/tp" prefix
+  if (apiPath === '/health') return out(200, { ok: true, token: !!token(), hotels: !!serpKey() });
+  if (!ALLOWED.includes(apiPath)) return out(404, { error: 'not allowed' });
   const tk = token();
-  if (!tk) return send(res, 503, JSON.stringify({ error: 'No Travelpayouts token. Put it in travelpayouts.key next to server.js.' }));
-  const target = 'https://api.travelpayouts.com' + apiPath + url.search;
+  if (!tk) return out(503, { error: 'No Travelpayouts token. Put it in travelpayouts.key next to server.js.' });
+  const target = 'https://api.travelpayouts.com' + apiPath + (search || '');
   const hit = cache.get(target);
-  if (hit && Date.now() - hit.t < CACHE_MS) return send(res, hit.status, hit.body);
+  if (hit && Date.now() - hit.t < CACHE_MS) return out(hit.status, hit.body);
   try {
     const r = await fetch(target, { headers: { 'X-Access-Token': tk, 'Accept-Encoding': 'gzip' } });
     const body = await r.text();
     if (r.ok) cache.set(target, { t: Date.now(), status: r.status, body });
-    send(res, r.status, body);
+    return out(r.status, body);
   } catch (e) {
-    send(res, 502, JSON.stringify({ error: 'Travelpayouts unreachable: ' + e.message }));
+    return out(502, { error: 'Travelpayouts unreachable: ' + e.message });
   }
 }
 
 /* Google Hotels through SerpApi: one search per city and date range, cached for 6 hours to save the free quota */
 const hotelCache = new Map();
-async function hotels(res, url){
+async function hotelSearch(q){                                           // q: URLSearchParams with q, ci, co, adults, currency
   const key = serpKey();
-  if (!key) return send(res, 503, JSON.stringify({ error: 'No SerpApi key. Put it in serpapi.key next to server.js.' }));
-  const q = url.searchParams;
+  if (!key) return out(503, { error: 'No SerpApi key. Put it in serpapi.key next to server.js.' });
   const p = new URLSearchParams({ engine: 'google_hotels', q: (q.get('q')||'').slice(0,120), check_in_date: q.get('ci')||'', check_out_date: q.get('co')||'',
     adults: String(Math.min(9, +q.get('adults')||2)), currency: (q.get('currency')||'EUR').toUpperCase(), gl: 'de', hl: 'en', rating: '7' });
   const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
   if (!isDate(p.get('check_in_date')) || !isDate(p.get('check_out_date')) || !p.get('q'))
-    return send(res, 400, JSON.stringify({ error: 'q, ci and co are required' }));
+    return out(400, { error: 'q, ci and co are required' });
   const ck = p.toString(), hit = hotelCache.get(ck);
-  if (hit && Date.now() - hit.t < 6 * 3600 * 1000) return send(res, 200, hit.body);
+  if (hit && Date.now() - hit.t < 6 * 3600 * 1000) return out(200, hit.body);
   p.set('api_key', key);
   try {
     const r = await fetch('https://serpapi.com/search.json?' + p);
     const j = await r.json();
-    if (!r.ok || j.error) return send(res, r.ok ? 502 : r.status, JSON.stringify({ error: j.error || ('SerpApi ' + r.status) }));
+    if (!r.ok || j.error) return out(r.ok ? 502 : r.status, { error: j.error || ('SerpApi ' + r.status) });
     // pass on only what the page needs (and never the key)
     const props = (j.properties || []).map(h => ({ name: h.name, type: h.type, link: h.link || null, description: h.description || '',
       night: h.rate_per_night && h.rate_per_night.extracted_lowest, total: h.total_rate && h.total_rate.extracted_lowest,
@@ -81,8 +82,8 @@ async function hotels(res, url){
       source: h.prices && h.prices[0] && h.prices[0].source || null }));
     const body = JSON.stringify({ ok: true, properties: props });
     hotelCache.set(ck, { t: Date.now(), body });
-    send(res, 200, body);
-  } catch (e) { send(res, 502, JSON.stringify({ error: 'SerpApi unreachable: ' + e.message })); }
+    return out(200, body);
+  } catch (e) { return out(502, { error: 'SerpApi unreachable: ' + e.message }); }
 }
 
 function serveFile(res, url){
@@ -105,11 +106,15 @@ function openBrowser(){
   exec(cmd, () => {});
 }
 
+module.exports = { tpGet, hotelSearch };
+if (require.main !== module) return;                                      // required as a library: don't start the server
+
+const reply = (res, p) => p.then(r => send(res, r.status, r.body));
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (req.method !== 'GET') return send(res, 405, 'Method not allowed', 'text/plain');
-  if (url.pathname.startsWith('/tp/')) return proxy(req, res, url);
-  if (url.pathname === '/hotels/search') return hotels(res, url);
+  if (url.pathname.startsWith('/tp/')) return reply(res, tpGet(url.pathname.slice(3), url.search));
+  if (url.pathname === '/hotels/search') return reply(res, hotelSearch(url.searchParams));
   serveFile(res, url);
 });
 server.on('error', e => {
