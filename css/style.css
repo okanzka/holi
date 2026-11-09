@@ -184,6 +184,29 @@ footer .s{font-family:var(--font-s);color:var(--coral);font-size:1.3rem}
   .hero .sun{width:150px;height:150px;right:-20px}
   .item{grid-template-columns:1fr}
   .item .amt{text-align:left}
+  /* phone: compact one-line nav (scrolls sideways on very narrow screens instead of wrapping) */
+  .nav .wrap{gap:10px;height:58px}
+  .logo{font-size:1.3rem;gap:4px}
+  .logo span{display:none}
+  .nav ul{gap:2px;overflow-x:auto;scrollbar-width:none}
+  .nav ul::-webkit-scrollbar{display:none}
+  .nav ul a.link{display:block;padding:7px 9px;font-size:.82rem;white-space:nowrap}
+  .eyebrow{font-size:.66rem;letter-spacing:.1em;padding:5px 12px}
+  .hero p.lead{font-size:1rem}
+  .card{padding:18px}
+  .card h2{font-size:1.35rem}
+  /* swap button: small, centred, pointing up/down like the stacked fields */
+  .g-search .swap{justify-self:center;width:44px;height:40px;margin:-6px 0;transform:rotate(90deg)}
+  /* flights trip type: 2×2 grid instead of a squeezed pill */
+  #tripType{display:grid;grid-template-columns:1fr 1fr;width:100%;border-radius:18px}
+  #tripType button{border-radius:14px;padding:10px 8px;line-height:1.2}
+  /* deal rows: price gets its own line */
+  .deal{gap:10px 14px}
+  .deal .amt{grid-column:1/-1}
+  /* assistant composer: full-width box, button underneath */
+  .composer{flex-direction:column;align-items:stretch}
+  form.composer textarea{min-height:84px}
+  .composer .btn{align-self:flex-end}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
