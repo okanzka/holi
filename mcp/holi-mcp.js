@@ -31,7 +31,7 @@ function loadSite(){
   const log = (...a) => console.error(...a);                               // stdout is reserved for JSON-RPC
   const ctx = vm.createContext({
     console: { log, info: log, warn: log, error: log, debug: log }, Intl, Date, Math, JSON, URL, URLSearchParams,
-    Promise, setTimeout, clearTimeout, fetch: siteFetch, localStorage,
+    Promise, setTimeout, clearTimeout, AbortController, fetch: siteFetch, localStorage,
     document: { addEventListener: noop, querySelector: () => null, querySelectorAll: () => [], body: { dataset: {} } },
     location: { protocol: 'http:', search: '', hash: '' },
   });

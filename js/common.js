@@ -160,51 +160,76 @@ function attachAutocomplete(input){
     if(input.value && input.value!==input.dataset.label){ const c=H.codeOf(input); if(c) setAirport(input,c); } },120));
 }
 
+/* ---------- network: every request times out, and a newer search cancels the older one ----------
+   NET.begin(channel) aborts that channel's previous search and returns the signal for the new one;
+   pass it down as `signal`, so cancelled searches stop sending requests instead of queueing up. */
+const NET = {
+  TIMEOUT:15000,
+  _ctl:{},
+  begin(ch){ this.cancel(ch); return (this._ctl[ch]=new AbortController()).signal; },
+  cancel(ch){ if(this._ctl[ch]){ this._ctl[ch].abort(); delete this._ctl[ch]; } },
+  check(signal){ if(signal&&signal.aborted) throw new Error('cancelled'); },
+  FAILED:Symbol('failed'),   // set on a per-day result when a month could not be loaded (as opposed to: no flights)
+  /* fetch + JSON body under one timer (a stalled body can hang too): {ok,status,data} */
+  async json(url,opts={},ms=this.TIMEOUT){
+    const outer=opts.signal; this.check(outer);
+    const ctl=new AbortController(), stop=()=>ctl.abort();
+    const t=setTimeout(stop,ms); if(outer) outer.addEventListener('abort',stop,{once:true});
+    try{ const r=await fetch(url,{...opts,signal:ctl.signal}); let data=null; try{ data=await r.json(); }catch(e){ if(ctl.signal.aborted) throw e; }
+      return {ok:r.ok,status:r.status,data}; }
+    catch(e){ if(outer&&outer.aborted) throw new Error('cancelled'); if(ctl.signal.aborted) throw new Error('Request timed out'); throw e; }
+    finally{ clearTimeout(t); if(outer) outer.removeEventListener('abort',stop); }
+  },
+};
+
 /* ---------- Ryanair live fares (public fare-finder API, allows browser access) ---------- */
 const RYANAIR = {
   base:'https://services-api.ryanair.com/farfnd/v4',
-  async get(path,params){
+  async get(path,params,signal){
     const u=this.base+path+'?'+new URLSearchParams(params);
-    const r=await fetch(u); if(!r.ok) throw new Error('Ryanair '+r.status); return r.json();
+    const r=await NET.json(u,{signal}); if(!r.ok) throw new Error('Ryanair '+r.status); return r.data||{};
   },
   /* cheapest round trip to every destination (or one, if `to` given) */
-  async roundTrips({from,to,outFrom,outTo,inFrom,inTo,minN,maxN,currency}){
+  async roundTrips({from,to,outFrom,outTo,inFrom,inTo,minN,maxN,currency,signal}){
     const p={departureAirportIataCode:from,outboundDepartureDateFrom:outFrom,outboundDepartureDateTo:outTo,
       inboundDepartureDateFrom:inFrom,inboundDepartureDateTo:inTo,durationFrom:minN||1,durationTo:maxN||30,currency,market:'en-gb',adultPaxCount:1};
     if(to) p.arrivalAirportIataCode=to;
-    const d=await this.get('/roundTripFares',p);
+    const d=await this.get('/roundTripFares',p,signal);
     return (d.fares||[]).map(f=>({origin:from,dest:f.outbound.arrivalAirport.iataCode,destCity:f.outbound.arrivalAirport.city.name,
       country:f.outbound.arrivalAirport.countryName,outDep:f.outbound.departureDate,outArr:f.outbound.arrivalDate,
       inDep:f.inbound.departureDate,inArr:f.inbound.arrivalDate,pp:f.summary.price.value,cur:f.summary.price.currencyCode,
       outFlight:f.outbound.flightNumber,inFlight:f.inbound.flightNumber}));
   },
-  async oneWays({from,to,outFrom,outTo,currency}){
+  async oneWays({from,to,outFrom,outTo,currency,signal}){
     const p={departureAirportIataCode:from,outboundDepartureDateFrom:outFrom,outboundDepartureDateTo:outTo,currency,market:'en-gb'};
     if(to) p.arrivalAirportIataCode=to;
-    const d=await this.get('/oneWayFares',p);
+    const d=await this.get('/oneWayFares',p,signal);
     return (d.fares||[]).map(f=>({origin:from,dest:f.outbound.arrivalAirport.iataCode,destCity:f.outbound.arrivalAirport.city.name,
       country:f.outbound.arrivalAirport.countryName,outDep:f.outbound.departureDate,outArr:f.outbound.arrivalDate,
       pp:f.outbound.price.value,cur:f.outbound.price.currencyCode,outFlight:f.outbound.flightNumber}));
   },
   /* {YYYY-MM-DD: {price,cur,dep}} for each day in the given months */
   _pd:new Map(),   // cache: one request per route+month+currency per page load
-  async perDay(from,to,months,currency){
+  async perDay(from,to,months,currency,signal){
+    NET.check(signal);
     const out={};
     await Promise.all(months.map(async m=>{
       const k=`${from}-${to}-${m.slice(0,7)}-${currency}`;
       if(!this._pd.has(k)) this._pd.set(k,(async()=>{ const r={};
         try{ const d=await this.get(`/oneWayFares/${from}/${to}/cheapestPerDay`,{outboundMonthOfDate:m.slice(0,7)+'-01',currency});
           (d.outbound&&d.outbound.fares||[]).forEach(f=>{ if(f.price&&!f.unavailable&&!f.soldOut) r[f.day]={price:f.price.value,cur:f.price.currencyCode,dep:f.departureDate,arr:f.arrivalDate}; });
-        }catch(e){ this._pd.delete(k); } return r; })());
+        }catch(e){ this._pd.delete(k); r[NET.FAILED]=true; } return r; })());
       Object.assign(out,await this._pd.get(k));
     }));
+    NET.check(signal);
     return out;
   },
   /* airports with direct Ryanair flights to `to` (an airport, or "C:XX" = its 8 biggest airports) in the window.
      Routes run both ways, so the airport's own route map tells us where flights come from. */
-  async sourcesTo(to,outFrom,latest,currency){
+  async sourcesTo(to,outFrom,latest,currency,signal){
     const targets=H.isCountry(to)?AP.inCountry(to.slice(2),8).map(a=>a.code):[to];
-    const nets=await Promise.all(targets.map(c=>this.oneWays({from:c,outFrom,outTo:latest,currency}).catch(()=>[])));
+    const nets=await Promise.all(targets.map(c=>this.oneWays({from:c,outFrom,outTo:latest,currency,signal}).catch(()=>[])));
+    NET.check(signal);
     return [...new Set(nets.flat().map(d=>d.dest))].filter(c=>!targets.includes(c)).slice(0,60);
   },
   bookUrl(o){
@@ -312,7 +337,10 @@ function decorateHero(){
 document.addEventListener('DOMContentLoaded',()=>{ decorateHero(); document.querySelectorAll('input[data-ac]').forEach(attachAutocomplete); });
 
 /* ---------- multi-city round trips: HOME → A (stay) → B (stay) → HOME, live Ryanair fares ---------- */
-async function pool(items,n,fn){ const q=[...items], out=[]; await Promise.all(Array.from({length:n},async()=>{ while(q.length){ const it=q.shift(); try{ out.push(await fn(it)); }catch(e){} } })); return out; }
+/* run fn over items, n at a time; a failed item is skipped. With a signal: stop starting new items once it is aborted, then throw "cancelled" */
+async function pool(items,n,fn,signal){ const q=[...items], out=[];
+  await Promise.all(Array.from({length:n},async()=>{ while(q.length&&!(signal&&signal.aborted)){ const it=q.shift(); try{ out.push(await fn(it)); }catch(e){} } }));
+  NET.check(signal); return out; }
 const MULTI = {
   /* START → stop(s) → END, every leg a direct Ryanair flight, live fares.
      opts: {from, to (end airport, default = from), stops (1 or 2, default 2), outFrom, outTo, latest, minN, maxN, currency, must}
@@ -324,8 +352,8 @@ const MULTI = {
     const outFrom=H.parse(o.outFrom)<t?H.fmt(t):o.outFrom;
     progress(`Finding every city you can fly to from ${o.from}…`);
     const [endNetList,leg1]=await Promise.all([
-      RYANAIR.oneWays({from:end,outFrom,outTo:o.latest,currency:o.currency}),      // route map of the END airport
-      RYANAIR.oneWays({from:o.from,outFrom,outTo:o.outTo,currency:o.currency})]);  // cheapest first leg per city
+      RYANAIR.oneWays({from:end,outFrom,outTo:o.latest,currency:o.currency,signal:o.signal}),      // route map of the END airport
+      RYANAIR.oneWays({from:o.from,outFrom,outTo:o.outTo,currency:o.currency,signal:o.signal})]);  // cheapest first leg per city
     const endNet=new Set(endNetList.map(d=>d.dest));   // cities with a direct flight to the end airport
     const ccOf=c=>{ const a=AP.byCode(c); return a?a.cc:''; };
     const match=c=>H.isCountry(o.must)?ccOf(c)===o.must.slice(2):c===o.must;
@@ -341,7 +369,7 @@ const MULTI = {
     if(stops===1){
       const As=leg1.filter(a=>a.dest!==end&&endNet.has(a.dest)&&(!o.must||match(a.dest)));
       progress(`Checking flights on to ${end} from ${As.length} cities…`);
-      const back={}; await pool(As,6,async a=>{ back[a.dest]=await RYANAIR.perDay(a.dest,end,months,o.currency); });
+      const back={}; await pool(As,6,async a=>{ back[a.dest]=await RYANAIR.perDay(a.dest,end,months,o.currency,o.signal); },o.signal);
       As.forEach(a=>{ const b=bestHome(back[a.dest]||{},H.parse(a.outDep.slice(0,10))); if(!b) return;
         res.push({legs:[leg(a),lastLeg(a.dest,b)],stops:[a.destCity],nights:[H.diff(H.parse(a.outDep.slice(0,10)),H.parse(b.day))],
           total:a.pp+b.price,cur:a.cur,start:a.outDep.slice(0,10),end:b.day}); });
@@ -353,12 +381,12 @@ const MULTI = {
     const leg2=(await pool(leg1.filter(a=>a.dest!==end),6,async a=>{
       const d1=H.parse(a.outDep.slice(0,10)), f=H.add(d1,minN), to=H.add(d1,maxN), lim=H.add(H.parse(o.latest),-minN);
       const last=to<lim?to:lim; if(f>last) return {a,opts:[]};
-      const r=await RYANAIR.oneWays({from:a.dest,outFrom:H.fmt(f),outTo:H.fmt(last),currency:o.currency});
+      const r=await RYANAIR.oneWays({from:a.dest,outFrom:H.fmt(f),outTo:H.fmt(last),currency:o.currency,signal:o.signal});
       return {a,opts:r.filter(b=>b.dest!==end&&b.dest!==o.from&&b.dest!==a.dest&&endNet.has(b.dest))};
-    }));
+    },o.signal));
     const Bs=[...new Set(leg2.flatMap(x=>x.opts.map(b=>b.dest)))];
     progress(`Checking flights on to ${end} from ${Bs.length} cities…`);
-    const back={}; await pool(Bs,6,async b=>{ back[b]=await RYANAIR.perDay(b,end,months,o.currency); });
+    const back={}; await pool(Bs,6,async b=>{ back[b]=await RYANAIR.perDay(b,end,months,o.currency,o.signal); },o.signal);
     leg2.forEach(({a,opts})=>opts.forEach(b=>{
       if(o.must&&!match(a.dest)&&!match(b.dest)) return;
       const d2=H.parse(b.outDep.slice(0,10)), h=bestHome(back[b.dest]||{},d2); if(!h) return;
@@ -388,8 +416,8 @@ MULTI.viaLoop = async function(o,progress=()=>{}){
 
   progress(`Finding every city you can fly to from ${o.from}…`);
   const [homeNet,leg1]=await Promise.all([
-    RYANAIR.oneWays({from:o.from,outFrom,outTo:o.latest,currency:o.currency}),
-    RYANAIR.oneWays({from:o.from,outFrom,outTo:o.outTo,currency:o.currency})]);
+    RYANAIR.oneWays({from:o.from,outFrom,outTo:o.latest,currency:o.currency,signal:o.signal}),
+    RYANAIR.oneWays({from:o.from,outFrom,outTo:o.outTo,currency:o.currency,signal:o.signal})]);
   // last-stop airports: must have a direct flight back home
   const homeSet=new Set(homeNet.map(d=>d.dest));
   const ends=H.isCountry(o.last)?[...homeSet].filter(c=>ccOf(c)===o.last.slice(2)):(homeSet.has(o.last)?[o.last]:[]);
@@ -402,9 +430,9 @@ MULTI.viaLoop = async function(o,progress=()=>{}){
   if(k===1){
     progress(`Checking flights from ${As.length} cities to ${H.cityOf(o.last)}…`);
     const hops=await pool(As,6,async a=>{ const w=win(H.parse(a.outDep.slice(0,10))); if(!w) return {a,opts:[]};
-      const r=await RYANAIR.oneWays({from:a.dest,outFrom:w[0],outTo:w[1],currency:o.currency}); return {a,opts:r.filter(x=>endSet.has(x.dest))}; });
+      const r=await RYANAIR.oneWays({from:a.dest,outFrom:w[0],outTo:w[1],currency:o.currency,signal:o.signal}); return {a,opts:r.filter(x=>endSet.has(x.dest))}; },o.signal);
     progress(`Checking flights home to ${o.from}…`);
-    await pool(ends,6,async e=>{ homeBack[e]=await RYANAIR.perDay(e,o.from,months,o.currency); });
+    await pool(ends,6,async e=>{ homeBack[e]=await RYANAIR.perDay(e,o.from,months,o.currency,o.signal); },o.signal);
     hops.forEach(({a,opts})=>opts.forEach(x=>{
       const d2=H.parse(x.outDep.slice(0,10)), h=pick(homeBack[x.dest]||{},d2,o.latest); if(!h) return;
       res.push({legs:[leg(a),leg(x),legP(x.dest,o.from,h)],stops:[a.destCity,x.destCity],
@@ -413,16 +441,16 @@ MULTI.viaLoop = async function(o,progress=()=>{}){
   } else {
     progress(`Checking onward flights from ${As.length} cities…`);
     const hops=await pool(As,6,async a=>{ const w=win(H.parse(a.outDep.slice(0,10))); if(!w) return {a,opts:[]};
-      const r=await RYANAIR.oneWays({from:a.dest,outFrom:w[0],outTo:w[1],currency:o.currency});
-      return {a,opts:r.filter(b=>b.dest!==o.from&&b.dest!==a.dest&&!endSet.has(b.dest)&&(!o.must||match(a.dest)||match(b.dest)))}; });
+      const r=await RYANAIR.oneWays({from:a.dest,outFrom:w[0],outTo:w[1],currency:o.currency,signal:o.signal});
+      return {a,opts:r.filter(b=>b.dest!==o.from&&b.dest!==a.dest&&!endSet.has(b.dest)&&(!o.must||match(a.dest)||match(b.dest)))}; },o.signal);
     const Bs=[...new Set(hops.flatMap(h=>h.opts.map(b=>b.dest)))];
     progress(`Checking which of ${Bs.length} cities fly to ${H.cityOf(o.last)}…`);
     // which last-stop airports each B reaches (one request per B), then daily prices for those pairs
-    const reach={}; await pool(Bs,6,async b=>{ const r=await RYANAIR.oneWays({from:b,outFrom,outTo:o.latest,currency:o.currency}); reach[b]=r.filter(x=>endSet.has(x.dest)).map(x=>x.dest); });
+    const reach={}; await pool(Bs,6,async b=>{ const r=await RYANAIR.oneWays({from:b,outFrom,outTo:o.latest,currency:o.currency,signal:o.signal}); reach[b]=r.filter(x=>endSet.has(x.dest)).map(x=>x.dest); },o.signal);
     const pairs=Bs.flatMap(b=>(reach[b]||[]).map(e=>[b,e])).slice(0,90);
     progress(`Reading daily prices for ${pairs.length} connections…`);
-    const pd={}; await pool(pairs,6,async([b,e])=>{ pd[b+'>'+e]=await RYANAIR.perDay(b,e,months,o.currency); });
-    await pool(ends,6,async e=>{ homeBack[e]=await RYANAIR.perDay(e,o.from,months,o.currency); });
+    const pd={}; await pool(pairs,6,async([b,e])=>{ pd[b+'>'+e]=await RYANAIR.perDay(b,e,months,o.currency,o.signal); },o.signal);
+    await pool(ends,6,async e=>{ homeBack[e]=await RYANAIR.perDay(e,o.from,months,o.currency,o.signal); },o.signal);
     hops.forEach(({a,opts})=>opts.forEach(b=>{
       const d2=H.parse(b.outDep.slice(0,10));
       (reach[b.dest]||[]).forEach(e=>{
@@ -446,12 +474,12 @@ const TP = {
   async available(){
     if(this._ok!==null) return this._ok;
     if(!/^https?:$/.test(location.protocol)) return (this._ok=false);
-    try{ const j=await (await fetch('/tp/health')).json(); this._ok=!!j.token; }catch(e){ this._ok=false; }
+    try{ const r=await NET.json('/tp/health',{},5000); this._ok=!!(r.data&&r.data.token); }catch(e){ this._ok=false; }
     return this._ok;
   },
-  async get(p,params){
+  async get(p,params,signal){
     const clean=Object.fromEntries(Object.entries(params).filter(([k,v])=>v!==null&&v!==undefined&&v!==''));
-    const r=await fetch('/tp'+p+'?'+new URLSearchParams(clean)); const j=await r.json();
+    const r=await NET.json('/tp'+p+'?'+new URLSearchParams(clean),{signal}); const j=r.data||{};
     if(!r.ok||j.success===false) throw new Error(j.error||('Travelpayouts '+r.status)); return j.data;
   },
   months(a,b){ const out=[]; let d=H.parse(a); d.setDate(1); const e=H.parse(b); while(d<=e){ out.push(H.fmt(d).slice(0,7)); d=new Date(d.getFullYear(),d.getMonth()+1,1); } return out; },
@@ -464,47 +492,49 @@ const TP = {
       stops:x.transfers||0,rstops:x.return_transfers||0,link:x.link?'https://www.aviasales.com'+x.link:null};
   },
   inRange:(iso,a,b)=>{ const d=String(iso||'').slice(0,10); return d>=a&&d<=b; },
-  async roundTrips({from,to,outFrom,outTo,inFrom,inTo,minN,maxN,currency,direct}){
+  async roundTrips({from,to,outFrom,outTo,inFrom,inTo,minN,maxN,currency,direct,signal}){
     const out=[];
     for(const m1 of this.months(outFrom,outTo)) for(const m2 of this.months(inFrom,inTo)){
       const rows=await this.get('/aviasales/v3/prices_for_dates',{origin:from||'',destination:to||'',departure_at:m1,return_at:m2,
-        one_way:'false',direct:direct?'true':'false',sorting:'price',unique:'false',limit:1000,currency:(currency||'EUR').toLowerCase()});
+        one_way:'false',direct:direct?'true':'false',sorting:'price',unique:'false',limit:1000,currency:(currency||'EUR').toLowerCase()},signal);
       (rows||[]).forEach(x=>{ if(!this.inRange(x.departure_at,outFrom,outTo)||!this.inRange(x.return_at,inFrom,inTo)) return;
         const n=H.diff(H.parse(x.departure_at.slice(0,10)),H.parse(x.return_at.slice(0,10)));
         if(n<(minN||1)||n>(maxN||60)) return; out.push(this.norm(x,currency)); });
     }
     return out;
   },
-  async oneWays({from,to,outFrom,outTo,currency,direct}){
+  async oneWays({from,to,outFrom,outTo,currency,direct,signal}){
     const out=[];
     for(const m of this.months(outFrom,outTo)){
       const rows=await this.get('/aviasales/v3/prices_for_dates',{origin:from||'',destination:to||'',departure_at:m,one_way:'true',
-        direct:direct?'true':'false',sorting:'price',unique:'false',limit:1000,currency:(currency||'EUR').toLowerCase()});
+        direct:direct?'true':'false',sorting:'price',unique:'false',limit:1000,currency:(currency||'EUR').toLowerCase()},signal);
       (rows||[]).forEach(x=>{ if(this.inRange(x.departure_at,outFrom,outTo)) out.push(this.norm(x,currency)); });
     }
     return out;
   },
   /* cheapest one-way per day for a route: {YYYY-MM-DD:{price,cur,dep,airline,flight,stops,link}} */
-  async perDay(from,to,months,currency,direct){
+  async perDay(from,to,months,currency,direct,signal){
     const res={};
     await Promise.all(months.map(async m=>{ try{
       const data=await this.get('/aviasales/v3/grouped_prices',{origin:from,destination:to,departure_at:m.slice(0,7),group_by:'departure_at',
-        one_way:'true',direct:direct?'true':'false',currency:(currency||'EUR').toLowerCase()});
+        one_way:'true',direct:direct?'true':'false',currency:(currency||'EUR').toLowerCase()},signal);
       Object.entries(data||{}).forEach(([day,x])=>{ res[day]={price:x.price,cur:(currency||'EUR').toUpperCase(),dep:x.departure_at,arr:null,
         airline:x.airline,flight:x.airline+(x.flight_number||''),stops:x.transfers||0,link:x.link?'https://www.aviasales.com'+x.link:null,src:'tp'}; });
     }catch(e){} }));
+    NET.check(signal);
     return res;
   },
 };
 
 /* cheapest fare per day from every source we have: Ryanair (live) + all airlines (Travelpayouts, cached) */
 const FARES = {
-  async perDay(from,to,months,currency,direct){
+  async perDay(from,to,months,currency,direct,signal){
     const [ry,tp]=await Promise.all([
-      RYANAIR.perDay(from,to,months,currency).then(r=>{ Object.values(r).forEach(v=>{ v.airline='FR'; v.stops=0; v.src='ryanair'; }); return r; }),
-      TP.available().then(ok=>ok?TP.perDay(from,to,months,currency,direct):{}) ]);
+      RYANAIR.perDay(from,to,months,currency,signal).then(r=>{ Object.values(r).forEach(v=>{ v.airline='FR'; v.stops=0; v.src='ryanair'; }); return r; }),
+      TP.available().then(ok=>ok?TP.perDay(from,to,months,currency,direct,signal):{}) ]);
     const out={...tp};
     Object.entries(ry).forEach(([d,v])=>{ if(!out[d]||v.price<=out[d].price) out[d]=v; });   // live Ryanair wins ties
+    if(ry[NET.FAILED]&&!Object.keys(out).length) out[NET.FAILED]=true;   // nothing at all, and Ryanair did not answer
     return out;
   },
 };

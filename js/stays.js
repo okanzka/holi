@@ -36,14 +36,14 @@ const STAYS = {
   async available(){
     if(this._svc!==null) return this._svc;
     if(!/^https?:$/.test(location.protocol)) return (this._svc=false);
-    try{ this._svc=!!(await (await fetch('/tp/health')).json()).hotels; }catch(e){ this._svc=false; }
+    try{ const r=await NET.json('/tp/health',{},5000); this._svc=!!(r.data&&r.data.hotels); }catch(e){ this._svc=false; }
     return this._svc;
   },
   async search(c,adults,cur){
     const ck='hotels:'+[c.city,c.ci,c.co,adults,cur].join('|'), hit=H.load(ck,null);
     if(hit&&Date.now()-hit.t<6*3600e3) return hit.list;               // save the free search quota
-    const r=await fetch('/hotels/search?'+new URLSearchParams({q:`hostels and hotels in ${c.city}`,ci:c.ci,co:c.co,adults,currency:cur}));
-    const j=await r.json(); if(!r.ok||!j.ok) throw new Error(j.error||'Hotel search failed');
+    const r=await NET.json('/hotels/search?'+new URLSearchParams({q:`hostels and hotels in ${c.city}`,ci:c.ci,co:c.co,adults,currency:cur}),{},30000);
+    const j=r.data||{}; if(!r.ok||!j.ok) throw new Error(j.error||'Hotel search failed');
     H.save(ck,{t:Date.now(),list:j.properties}); return j.properties;
   },
   isHostel(p){ return /hostel|backpack|dorm|bunk|auberge|albergue|ostello|jugendherberge|youth/i.test((p.name||'')+' '+(p.description||'')+' '+(p.type||'')); },
@@ -139,7 +139,9 @@ function renderStayWizard(box){
 
 async function fillSuggestions(grid,c,P,choose){
   if(!(await STAYS.available())){
-    grid.innerHTML=`<div class="empty" style="grid-column:1/-1">🔑 Automatic suggestions with prices need a free <b>SerpApi</b> key (Google Hotels data).
+    grid.innerHTML=location.protocol==='about:'
+      ? `<div class="empty" style="grid-column:1/-1">ℹ️ Hotel suggestions with prices need the local server, so they show only on the computer running <code>start.bat</code>.<br>Here, open one of the sites below, pick a place, and enter it; the totals still work.</div>`
+      : `<div class="empty" style="grid-column:1/-1">🔑 Automatic suggestions with prices need a free <b>SerpApi</b> key (Google Hotels data).
       Put it in <code>serpapi.key</code> in the site folder and restart <code>start.bat</code>.<br>Until then, open one of the sites below, pick a place, and enter it here; the totals still work.</div>`;
     return;
   }

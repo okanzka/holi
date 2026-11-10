@@ -47,7 +47,7 @@ async function tpGet(apiPath, search){                                    // api
   const hit = cache.get(target);
   if (hit && Date.now() - hit.t < CACHE_MS) return out(hit.status, hit.body);
   try {
-    const r = await fetch(target, { headers: { 'X-Access-Token': tk, 'Accept-Encoding': 'gzip' } });
+    const r = await fetch(target, { headers: { 'X-Access-Token': tk, 'Accept-Encoding': 'gzip' }, signal: AbortSignal.timeout(15000) });
     const body = await r.text();
     if (r.ok) cache.set(target, { t: Date.now(), status: r.status, body });
     return out(r.status, body);
@@ -70,7 +70,7 @@ async function hotelSearch(q){                                           // q: U
   if (hit && Date.now() - hit.t < 6 * 3600 * 1000) return out(200, hit.body);
   p.set('api_key', key);
   try {
-    const r = await fetch('https://serpapi.com/search.json?' + p);
+    const r = await fetch('https://serpapi.com/search.json?' + p, { signal: AbortSignal.timeout(25000) });
     const j = await r.json();
     if (!r.ok || j.error) return out(r.ok ? 502 : r.status, { error: j.error || ('SerpApi ' + r.status) });
     // pass on only what the page needs (and never the key)

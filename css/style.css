@@ -327,6 +327,27 @@ img.flag{width:22px;height:auto;border-radius:3px;vertical-align:-3px;box-shadow
 .day.sel.low{background:var(--great);border-color:var(--great)}
 .day.sel.low .pr{color:#fff}
 .mgrid .day .dw{display:none}
+/* calendar polish: month view shows the day number only, a ★ on the cheapest day, a colour legend, and a retry note */
+.mgrid .day .mo{display:none}
+.mgrid .day.low{box-shadow:0 0 0 2px var(--great) inset}
+.mgrid .day.low .dd::after{content:" ★";color:var(--great);font-size:.75em}
+.day .pr.none{opacity:.7}
+.cal-legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:.75rem;font-weight:600;color:var(--ink-soft)}
+.cal-legend span{display:inline-flex;align-items:center;gap:5px}
+.cal-legend i{width:12px;height:12px;border-radius:4px;border:1px solid}
+.cal-legend i.t1{background:#e6f7ee;border-color:#bfe8d2}.cal-legend i.t2{background:#fff6e0;border-color:#f6e2b0}.cal-legend i.t3{background:#fdeae5;border-color:#f6cfc5}
+.cal-err{margin-top:8px;font-size:.82rem;color:var(--coral-d);font-weight:600}
+.cal-err button{border:0;background:none;color:var(--ocean-d);font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;padding:0 4px}
+@media (max-width:560px){
+  .days{gap:4px}
+  .day{padding:9px 1px 7px;border-radius:12px}
+  .day .dal i{display:none}                 /* "1 stop" does not fit a phone-width day; the logo stays */
+  .mgrid{gap:3px}
+  .mgrid .day{padding:6px 0;border-radius:9px;min-height:52px}
+  .mgrid .day .pr{font-size:.7rem;letter-spacing:-.02em}
+  .mgrid .day .dal{display:none}            /* the airline is in the summary below once a day is picked */
+  .month{padding:8px}
+}
 .legs.mview{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .legs.mview .leg{margin-top:18px}
 .legs.mview .month{max-width:none}

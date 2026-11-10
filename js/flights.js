@@ -41,9 +41,10 @@ async function loadAnywhere(){
   const key=JSON.stringify([T.from,T.to,T.tripType,r,T.minNights,T.currency,T.nearby,T.direct]);
   if(any.key===key) return;
   any={key,deals:[],loading:true,error:null,origins:[]}; renderAnywhere();
+  const signal=NET.begin('any');               // a newer search cancels this one
   const fromCountry=H.isCountry(T.from), fromAny=T.from==='ANY';
   // From = Anywhere: every city with a direct flight to the destination becomes an origin
-  const origins=fromAny ? await RYANAIR.sourcesTo(T.to,r.outFrom,r.inTo||r.outTo,T.currency)
+  const origins=fromAny ? await RYANAIR.sourcesTo(T.to,r.outFrom,r.inTo||r.outTo,T.currency,signal)
     : fromCountry ? AP.inCountry(T.from.slice(2),25).map(a=>a.code)
     : [T.from,...(T.nearby?AP.near(T.from,250,5).map(a=>a.code):[])];
   if(any.key!==key) return;
@@ -51,17 +52,17 @@ async function loadAnywhere(){
   const toCC=H.isCountry(T.to)?T.to.slice(2):null;
   // ask Ryanair a few airports at a time
   const res=[]; const queue=[...origins];
-  await Promise.all(Array.from({length:6},async()=>{ while(queue.length){ const o=queue.shift();
+  await Promise.all(Array.from({length:6},async()=>{ while(queue.length&&!signal.aborted){ const o=queue.shift();
     try{ res.push({ok:true,v:await (T.tripType==='rt'
-      ? RYANAIR.roundTrips({from:o,to:toAirport,...r,minN:T.minNights||1,maxN:60,currency:T.currency})
-      : RYANAIR.oneWays({from:o,to:toAirport,outFrom:r.outFrom,outTo:r.outTo,currency:T.currency}))}); }
+      ? RYANAIR.roundTrips({from:o,to:toAirport,...r,minN:T.minNights||1,maxN:60,currency:T.currency,signal})
+      : RYANAIR.oneWays({from:o,to:toAirport,outFrom:r.outFrom,outTo:r.outTo,currency:T.currency,signal}))}); }
     catch(e){ res.push({ok:false}); } } }));
   // every other airline (Travelpayouts, cached prices) when the local server is running
   if(await TP.available()){
-    const rt=T.tripType==='rt', p={...r,minN:T.minNights||1,maxN:60,currency:T.currency,direct:!!T.direct};
+    const rt=T.tripType==='rt', p={...r,minN:T.minNights||1,maxN:60,currency:T.currency,direct:!!T.direct,signal};
     const qs=fromAny?(toAirport?[{from:null,to:toAirport}]:AP.inCountry(toCC,8).map(a=>({from:null,to:a.code})))
       :origins.slice(0,fromCountry?10:origins.length).map(o=>({from:o,to:toAirport}));
-    await pool(qs,4,async q=>{ res.push({ok:true,tp:true,v:await (rt?TP.roundTrips({...p,...q}):TP.oneWays({...q,outFrom:r.outFrom,outTo:r.outTo,currency:T.currency,direct:!!T.direct}))}); });
+    await pool(qs,4,async q=>{ res.push({ok:true,tp:true,v:await (rt?TP.roundTrips({...p,...q}):TP.oneWays({...q,outFrom:r.outFrom,outTo:r.outTo,currency:T.currency,direct:!!T.direct,signal}))}); },signal);
   }
   if(any.key!==key) return;                         // a newer search started
   // from one airport: cheapest per destination. From a country: cheapest per departure+destination pair
@@ -191,9 +192,10 @@ async function loadLive(){
   const r=range(), key=JSON.stringify([T.from,T.to,T.tripType,r,T.currency,T.direct]);
   if(live.key===key) return;
   live={key,out:{},back:{},loading:true};
+  const signal=NET.begin('live');
   const [out,back]=await Promise.all([
-    FARES.perDay(T.from,T.to,monthsBetween(r.outFrom,r.outTo),T.currency,!!T.direct),
-    T.tripType==='rt'?FARES.perDay(T.to,T.from,monthsBetween(r.inFrom,r.inTo),T.currency,!!T.direct):Promise.resolve({})]);
+    FARES.perDay(T.from,T.to,monthsBetween(r.outFrom,r.outTo),T.currency,!!T.direct,signal),
+    T.tripType==='rt'?FARES.perDay(T.to,T.from,monthsBetween(r.inFrom,r.inTo),T.currency,!!T.direct,signal):Promise.resolve({})]);
   if(live.key!==key) return;
   live.out=out; live.back=back; live.loading=false; renderRoute();
 }
@@ -320,7 +322,8 @@ async function loadMulti(){
   const p=mcParams(), key=JSON.stringify(p); if(mc.key===key) return;
   if(p.mode==='via'&&!p.last){ mc={key,res:null,loading:false,msg:'',err:'Pick your last stop before home (e.g. Mallorca) in the form above, then press Search.'}; renderMulti(); return; }
   mc={key,res:null,loading:true,msg:'Starting…',err:null}; renderMulti();
-  try{ const r=await (p.mode==='via'?MULTI.viaLoop:MULTI.search)(p,m=>{ if(mc.key===key){ mc.msg=m; renderMulti(); } }); if(mc.key!==key) return; mc.res=r; mc.note=r.note||null; }
+  const signal=NET.begin('mc');
+  try{ const r=await (p.mode==='via'?MULTI.viaLoop:MULTI.search)({...p,signal},m=>{ if(mc.key===key){ mc.msg=m; renderMulti(); } }); if(mc.key!==key) return; mc.res=r; mc.note=r.note||null; }
   catch(e){ if(mc.key!==key) return; mc.err='Could not reach Ryanair. Check your internet connection and try again.'; }
   mc.loading=false; renderMulti();
 }
@@ -385,7 +388,7 @@ function bindMcStays(root){ root.querySelectorAll('[data-mcstay]').forEach(b=>b.
 /* =====================================================================
    FARE CALENDAR — week strip / month grid with the lowest fare per day
    ===================================================================== */
-const cal={view:H.load('calView','week'),route:'',outAnchor:null,backAnchor:null,outMonth:null,backMonth:null,data:{},loaded:new Set(),pending:new Set()};
+const cal={view:H.load('calView','week'),route:'',outAnchor:null,backAnchor:null,outMonth:null,backMonth:null,data:{},loaded:new Set(),pending:new Set(),failed:new Set()};
 const WD=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 function priceFmt(n,cur){ try{ return new Intl.NumberFormat('en',{style:'currency',currency:cur||T.currency,maximumFractionDigits:0}).format(n); }catch(e){ return H.money(n,cur); } }
 const legKey=(a,b)=>`${a}-${b}-${T.currency}-${T.direct?1:0}`;
@@ -393,24 +396,35 @@ const legKey=(a,b)=>`${a}-${b}-${T.currency}-${T.direct?1:0}`;
 /* make sure the months covering `dates` are loaded for leg a→b */
 function ensureMonths(a,b,dates){
   const k=legKey(a,b); cal.data[k]=cal.data[k]||{};
-  const months=[...new Set(dates.map(d=>d.slice(0,7)))].filter(m=>!cal.loaded.has(k+m)&&!cal.pending.has(k+m));
+  const months=[...new Set(dates.map(d=>d.slice(0,7)))].filter(m=>!cal.loaded.has(k+m)&&!cal.pending.has(k+m)&&!cal.failed.has(k+m));
   if(!months.length) return;
   months.forEach(m=>cal.pending.add(k+m));
   FARES.perDay(a,b,months.map(m=>m+'-01'),T.currency,!!T.direct).then(res=>{
-    Object.assign(cal.data[k],res); months.forEach(m=>{ cal.pending.delete(k+m); cal.loaded.add(k+m); }); renderCal(); });
+    const failed=!!res[NET.FAILED];   // timed out: show "try again", not "no flight"
+    Object.assign(cal.data[k],res); months.forEach(m=>{ cal.pending.delete(k+m); (failed?cal.failed:cal.loaded).add(k+m); }); renderCal(); });
 }
 function dayInfo(a,b,ds){
   const k=legKey(a,b), m=ds.slice(0,7);
   if(H.parse(ds)<today()) return {state:'past'};
+  if(cal.failed.has(k+m)) return {state:'err'};
   if(!cal.loaded.has(k+m)) return {state:'load'};
   const p=(cal.data[k]||{})[ds]; return p?{state:'ok',price:p.price,cur:p.cur,dep:p.dep,arr:p.arr,airline:p.airline||'FR',stops:p.stops||0,link:p.link||null,src:p.src||'ryanair'}:{state:'none'};
 }
 function dayBtn(a,b,ds,sel,disabled,extra=''){
   const d=H.parse(ds), info=dayInfo(a,b,ds);
-  const pr=info.state==='ok'?`<span class="pr">${priceFmt(info.price,info.cur)}</span><span class="dal">${H.alLogo(info.airline)}${info.stops?`<i>${info.stops} stop</i>`:''}</span>`:info.state==='load'?'<span class="pr load"></span>':`<span class="pr none">${info.state==='past'?'':'no flight'}</span>`;
+  const pr=info.state==='ok'?`<span class="pr">${priceFmt(info.price,info.cur)}</span><span class="dal">${H.alLogo(info.airline)}${info.stops?`<i>${info.stops} stop</i>`:''}</span>`:info.state==='load'?'<span class="pr load"></span>':info.state==='err'?'<span class="pr none" title="Prices could not load">?</span>':`<span class="pr none" title="${info.state==='past'?'':'No flight'}">${info.state==='past'?'':'–'}</span>`;
   return `<button type="button" class="day${ds===sel?' sel':''}${extra}" data-d="${ds}" ${disabled||info.state==='past'?'disabled':''}>
-    <span class="dw">${H.dow(d)}</span><span class="dd">${d.getDate()} ${d.toLocaleDateString('en-GB',{month:'short'})}</span>${pr}</button>`;
+    <span class="dw">${H.dow(d)}</span><span class="dd">${d.getDate()}<span class="mo"> ${d.toLocaleDateString('en-GB',{month:'short'})}</span></span>${pr}</button>`;
 }
+
+/* a month that timed out shows "?" and a retry link instead of pretending there are no flights */
+const retryNote=infos=>infos.some(i=>i.state==='err')?'<div class="cal-err">Some prices could not load. <button type="button" data-retry>Try again</button></div>':'';
+function bindRetry(el){ const b=el.querySelector('[data-retry]'); if(b) b.onclick=()=>{ cal.failed.clear(); renderCal(); }; }
+/* horizontal swipe on touch screens: dir -1 = back, +1 = forward */
+function swipe(el,fn){ if(!el) return; let x0=null,y0=0;
+  el.addEventListener('touchstart',e=>{ x0=e.touches[0].clientX; y0=e.touches[0].clientY; },{passive:true});
+  el.addEventListener('touchend',e=>{ if(x0===null) return; const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0; x0=null;
+    if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)*1.5) fn(dx<0?1:-1); },{passive:true}); }
 
 function renderStrip(el,a,b,sel,anchor,minDate,which){
   const days=Array.from({length:7},(_,i)=>H.fmt(H.add(H.parse(anchor),i-3)));
@@ -419,8 +433,11 @@ function renderStrip(el,a,b,sel,anchor,minDate,which){
   const canBack=H.add(H.parse(anchor),-3)>today();
   el.innerHTML=`<div class="strip"><button type="button" class="navb" data-shift="-7" ${canBack?'':'disabled'} aria-label="Previous week">‹</button>
     <div class="days">${days.map((ds,i)=>dayBtn(a,b,ds,sel,minDate&&ds<=minDate,(infos[i].state==='ok'&&infos[i].price===low)?' low':'')).join('')}</div>
-    <button type="button" class="navb" data-shift="7" aria-label="Next week">›</button></div>`;
-  el.querySelectorAll('[data-shift]').forEach(btn=>btn.onclick=()=>{ cal[which+'Anchor']=H.fmt(H.add(H.parse(anchor),+btn.dataset.shift)); renderCal(); });
+    <button type="button" class="navb" data-shift="7" aria-label="Next week">›</button></div>${retryNote(infos)}`;
+  const shift=n=>{ if(n<0&&!canBack) return; cal[which+'Anchor']=H.fmt(H.add(H.parse(anchor),n)); renderCal(); };
+  el.querySelectorAll('[data-shift]').forEach(btn=>btn.onclick=()=>shift(+btn.dataset.shift));
+  swipe(el.querySelector('.days'),dir=>shift(7*dir));
+  bindRetry(el);
   el.querySelectorAll('.day[data-d]').forEach(btn=>btn.onclick=()=>pickDay(which,btn.dataset.d));
 }
 
@@ -430,15 +447,21 @@ function renderMonth(el,a,b,sel,month,minDate,which,rangeFrom,rangeTo){
   ensureMonths(a,b,days);
   const prices=days.map(ds=>dayInfo(a,b,ds)).filter(i=>i.state==='ok').map(i=>i.price).sort((x,y)=>x-y);
   const q1=prices[Math.floor(prices.length/3)], q2=prices[Math.floor(prices.length*2/3)];
-  const tierOf=p=>p<=q1?' t1':p<=q2?' t2':' t3';
+  const tierOf=p=>(p<=q1?' t1':p<=q2?' t2':' t3')+(p===prices[0]?' low':'');
+  const infos=days.map(ds=>dayInfo(a,b,ds));
   const lead=(first.getDay()+6)%7;
   const prevOk=new Date(first.getFullYear(),first.getMonth(),1)>new Date(today().getFullYear(),today().getMonth(),1);
   el.innerHTML=`<div class="month"><div class="mh"><button type="button" data-m="-1" ${prevOk?'':'disabled'}>‹</button>
       <b>${first.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</b><button type="button" data-m="1">›</button></div>
     <div class="mgrid">${WD.map(w=>`<div class="wd">${w}</div>`).join('')}${'<div class="blank"></div>'.repeat(lead)}
     ${days.map(ds=>{ const i=dayInfo(a,b,ds); const inr=rangeFrom&&rangeTo&&ds>rangeFrom&&ds<rangeTo?' inrange':'';
-      return dayBtn(a,b,ds,sel,minDate&&ds<=minDate,(i.state==='ok'?tierOf(i.price):'')+inr); }).join('')}</div></div>`;
-  el.querySelectorAll('[data-m]').forEach(btn=>btn.onclick=()=>{ const d=new Date(first.getFullYear(),first.getMonth()+(+btn.dataset.m),1); cal[which+'Month']=H.fmt(d).slice(0,7); renderCal(); });
+      return dayBtn(a,b,ds,sel,minDate&&ds<=minDate,(i.state==='ok'?tierOf(i.price):'')+inr); }).join('')}</div>
+    ${prices.length>1?`<div class="cal-legend"><span><i class="t1"></i>Cheaper</span><span><i class="t2"></i>Average</span><span><i class="t3"></i>Pricier</span><span>★ Lowest ${priceFmt(prices[0])}</span></div>`:''}
+    ${retryNote(infos)}</div>`;
+  const go=n=>{ if(n<0&&!prevOk) return; const d=new Date(first.getFullYear(),first.getMonth()+n,1); cal[which+'Month']=H.fmt(d).slice(0,7); renderCal(); };
+  el.querySelectorAll('[data-m]').forEach(btn=>btn.onclick=()=>go(+btn.dataset.m));
+  swipe(el.querySelector('.mgrid'),go);
+  bindRetry(el);
   el.querySelectorAll('.day[data-d]').forEach(btn=>btn.onclick=()=>pickDay(which,btn.dataset.d));
 }
 
@@ -502,6 +525,14 @@ function renderCal(){
 /* =====================================================================
    page
    ===================================================================== */
+/* stop the searches of the modes that are not on screen (they would keep the connection busy);
+   forget their key so coming back to that mode searches again */
+function stopOthers(keep){
+  if(keep!=='any'&&any.loading){ NET.cancel('any'); any.key=''; any.loading=false; }
+  if(keep!=='live'&&live.loading){ NET.cancel('live'); live.key=''; live.loading=false; }
+  if(keep!=='mc'&&mc.loading){ NET.cancel('mc'); mc.key=''; mc.loading=false; }
+}
+const quiet=e=>{ if(!/cancelled/.test(e&&e.message)) console.warn(e); };   // a superseded search is not an error
 function render(){
   T=H.trip(); flex=T.flex; tripType=T.tripType;
   const isMc=T.tripType==='mc'||T.tripType==='via';
@@ -510,14 +541,15 @@ function render(){
     $('#anyMode').classList.add('hidden'); $('#routeMode').classList.add('hidden');
     $('#routeTitle').innerHTML=T.tripType==='via'?`${H.esc(H.cityOf(T.from))} <em>→ ? →</em> ${H.esc(T.viaLast?H.cityOf(T.viaLast):'last stop')} <em>→</em> home`:`${H.esc(H.cityOf(T.from))} <em>→ 2 cities →</em> home`;
     $('#routeSub').textContent=`${H.nice(H.parse(T.start))} – ${H.nice(H.parse(T.end))} · ±${T.flex} days · ${T.adults} adult${T.adults>1?'s':''}${T.children?' + '+T.children+' child':''}`;
-    renderMulti(); loadMulti(); return;
+    stopOthers('mc'); renderMulti(); loadMulti().catch(quiet); return;
   }
   const isAny=H.isDealMode(T);
   $('#anyMode').classList.toggle('hidden',!isAny); $('#routeMode').classList.toggle('hidden',isAny);
   $('#routeTitle').innerHTML=T.from==='ANY'?`anywhere 🌍 <em>→</em> ${H.esc(H.cityOf(T.to))}`:T.to==='ANY'?`${H.esc(H.cityOf(T.from))} <em>→</em> anywhere 🌍`:`${H.esc(H.cityOf(T.from))} <em>→</em> ${H.esc(H.cityOf(T.to))}`;
   $('#routeSub').textContent=`${H.nice(H.parse(T.start))}${T.tripType==='rt'?' – '+H.nice(H.parse(T.end)):' (one way)'} · ±${T.flex} days · ${T.adults} adult${T.adults>1?'s':''}${T.children?' + '+T.children+' child':''}`;
-  if(isAny){ renderAnywhere(); loadAnywhere(); }
-  else { const v=VISA.info(T.to); $('#routeSub').textContent+=` · ${v.icon} ${v.label} (Turkish passport)`; renderCal(); renderRoute(); loadLive(); }
+  stopOthers(isAny?'any':'live');
+  if(isAny){ renderAnywhere(); loadAnywhere().catch(quiet); }
+  else { const v=VISA.info(T.to); $('#routeSub').textContent+=` · ${v.icon} ${v.label} (Turkish passport)`; renderCal(); renderRoute(); loadLive().catch(quiet); }
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
@@ -573,14 +605,18 @@ document.addEventListener('DOMContentLoaded',()=>{
   f.direct.addEventListener('change',submit);
   TP.available().then(ok=>{ document.body.classList.toggle('tp-on',ok);
     $('#tpBanner').classList.toggle('hidden',ok);
+    // where the page runs decides the advice: the online copy (Streamlit, srcdoc = "about:") can never reach start.bat
+    const online=location.protocol==='about:';
     if(!ok) $('#tpBanner').innerHTML=/^https?:$/.test(location.protocol)
       ?'⚠️ <b>Showing Ryanair only.</b> The local server is running but has no Travelpayouts key. Put your key in <code>travelpayouts.key</code> in the site folder and restart <code>start.bat</code>.'
+      :online?'ℹ️ <b>Online version: Ryanair prices only.</b> Other airlines (Pegasus, Wizz Air, SunExpress, THY…) need the local server, so they show only on the computer running <code>start.bat</code>, at <code>http://localhost:8080</code>.'
       :'⚠️ <b>Showing Ryanair only.</b> You opened this page as a file. To see <b>every airline</b> (Pegasus, Wizz Air, SunExpress, THY…), close this tab and double-click <b><code>start.bat</code></b> in the site folder. The site then opens at <code>http://localhost:8080</code>.';
     $('#srcNote').innerHTML=ok
       ?'✈️ <b>All airlines</b>: Ryanair prices are <b>live</b>; other airlines (Pegasus, Wizz Air, SunExpress, THY, Lufthansa and more) come from <b>recent Aviasales searches</b> and can change. Multi-city routes still use Ryanair only. Always check the final price on the booking site.'
+      :online?'ℹ️ <b>Ryanair only</b> in the online version. Every airline shows on the computer running <code>start.bat</code> (<code>http://localhost:8080</code>). Always check the final price on the booking site.'
       :'⚠️ <b>Only Ryanair right now.</b> To add every airline, close this tab and double-click <code>start.bat</code> in the site folder. It opens the site at <code>http://localhost:8080</code>.';
     $('#calSrc').innerHTML=ok?'<span class="live-tag" style="background:#e3eefc;color:#1d4f91">All airlines</span>':H.alLogo('FR',true);
-    if(ok){ any.key=''; live.key=''; cal.data={}; cal.loaded=new Set(); render(); } });   // filtering only: no new search needed
+    if(ok){ any.key=''; live.key=''; cal.data={}; cal.loaded=new Set(); cal.failed=new Set(); render(); } });   // filtering only: no new search needed
   document.querySelectorAll('#calView button').forEach(b=>b.onclick=()=>{ cal.view=b.dataset.v; H.save('calView',cal.view);
     cal.outMonth=T.start.slice(0,7); cal.backMonth=T.end.slice(0,7); renderCal(); });
   // multi-city controls
