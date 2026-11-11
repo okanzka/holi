@@ -4,6 +4,7 @@ The pages, CSS and JS are bundled into a small in-browser "router" (a nested ifr
 srcdoc is swapped on navigation). There is no server.js here, so only Ryanair prices work
 (same as opening index.html as a file). Run locally: streamlit run streamlit_app.py
 """
+import base64
 import json
 import re
 from pathlib import Path
@@ -30,6 +31,15 @@ def bundle() -> str:
     for f in (ROOT / "js").glob("*.js"):
         assets[f.name] = NAV_RE.sub(lambda m: f"parent.__go('{m.group(2)}')", f.read_text("utf-8"))
     css = (ROOT / "css" / "style.css").read_text("utf-8")
+    # the pages are served from srcdoc, so a relative image path in the CSS has nowhere to load from:
+    # inline every background image the stylesheet references as a data URI
+    def inline_image(m: re.Match) -> str:
+        path = ROOT / "background-image" / m.group(1)
+        if not path.is_file():
+            return m.group(0)
+        mime = {".webp": "image/webp", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}.get(path.suffix.lower(), "application/octet-stream")
+        return f'url("data:{mime};base64,{base64.b64encode(path.read_bytes()).decode()}")'
+    css = re.sub(r'url\("\.\./background-image/([^"]+)"\)', inline_image, css)
 
     pages = {}
     for name in PAGES:
