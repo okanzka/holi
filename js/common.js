@@ -316,25 +316,77 @@ function openAll(sites,o){
   if(blocked) H.toast('Your browser blocked some tabs — allow pop-ups for this page');
 }
 
-/* ---------- shared decoration ---------- */
+/* ---------- shared chrome ---------- */
 function decorateHero(){
-  document.querySelectorAll('.hero').forEach(h=>{
-    h.insertAdjacentHTML('afterbegin',`<div class="sun"></div><div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div><div class="plane">✈️</div>`);
-    h.insertAdjacentHTML('beforeend',`
-     <svg class="palm" viewBox="0 0 200 260" aria-hidden="true"><g fill="#1f5e43">
-      <path d="M98 255c6-60 4-120 12-170l8 1c-8 50-6 110-12 169z"/>
-      <path d="M112 88c-30-30-70-30-100-10 30-6 60 0 92 18z"/><path d="M112 86c-10-40-40-62-80-66 30 14 52 34 72 70z"/>
-      <path d="M114 86c20-38 54-52 86-44-34 4-58 20-80 48z"/><path d="M114 90c36-16 70-6 86 20-26-14-52-18-84-14z"/>
-      <path d="M112 86c4-34-10-62-30-80 12 26 18 50 22 80z"/><circle cx="108" cy="94" r="6" fill="#6b3f1f"/><circle cx="118" cy="96" r="5" fill="#6b3f1f"/></g></svg>
-     <svg class="waves" viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden="true">
-      <path fill="#7fd3cf" opacity=".6" d="M0 50 C240 90 480 10 720 40 S1200 90 1440 40 V120 H0Z"/>
-      <path fill="#3fb6b0" opacity=".55" d="M0 75 C200 40 460 110 720 75 S1180 40 1440 80 V120 H0Z"/>
-      <path fill="#fdf4e6" d="M0 98 C260 80 520 120 760 100 S1220 82 1440 100 V120 H0Z"/></svg>`);
-  });
   const page=document.body.dataset.page;
-  document.querySelectorAll('.nav a.link').forEach(a=>{ if(a.dataset.page===page) a.classList.add('active'); });
+  document.querySelectorAll('.nav a.link').forEach(a=>{ if(a.dataset.page===page){ a.classList.add('active'); a.setAttribute('aria-current','page'); } });
+  themeButton();
+  // the nav is clear glass over the hero and frosts once the hero has scrolled away under it
+  const nav=document.querySelector('.nav'), hero=document.querySelector('.hero');
+  if(nav){
+    const set=()=>{ const edge=hero?hero.offsetHeight-nav.offsetHeight:0; nav.classList.toggle('scrolled',window.scrollY>edge-8); };
+    window.addEventListener('scroll',set,{passive:true}); window.addEventListener('resize',set); set();
+  }
 }
-document.addEventListener('DOMContentLoaded',()=>{ decorateHero(); document.querySelectorAll('input[data-ac]').forEach(attachAutocomplete); });
+
+/* Light by default; the sun/moon button in the nav switches, and the choice is remembered.
+   The switch cross-fades (View Transitions where supported) so the brightness never jumps. */
+function themeButton(){
+  const ul=document.querySelector('.nav ul'); if(!ul) return;
+  const root=document.documentElement, meta=document.querySelector('meta[name=theme-color]');
+  const li=document.createElement('li');
+  li.innerHTML=`<button type="button" class="theme-btn">
+    <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>
+    <svg class="moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.4 14.6A8.5 8.5 0 0 1 9.4 3.6a8.5 8.5 0 1 0 11 11z"/></svg></button>`;
+  ul.appendChild(li);
+  const btn=li.firstElementChild;
+  const label=()=>{ const dark=root.dataset.theme==='dark'; btn.setAttribute('aria-label',dark?'Switch to light mode':'Switch to dark mode'); btn.title=btn.getAttribute('aria-label'); btn.setAttribute('aria-pressed',dark); };
+  const apply=dark=>{
+    if(dark) root.dataset.theme='dark'; else delete root.dataset.theme;
+    if(meta) meta.content=dark?'#000000':'#f2f5f9';
+    try{ localStorage.setItem('heybe.theme',dark?'dark':'light'); }catch(e){}
+    label();
+  };
+  label();
+  btn.onclick=()=>{
+    const dark=root.dataset.theme!=='dark';
+    const calm=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(document.startViewTransition&&!calm) document.startViewTransition(()=>apply(dark)); else apply(dark);
+  };
+}
+
+/* Segmented controls get one thumb that slides (spring easing in CSS) to whichever button is .on.
+   Pages toggle .on themselves and some re-render their .seg, so a single observer keeps every thumb in place. */
+function segThumbs(){
+  if(typeof MutationObserver==='undefined') return;
+  const place=seg=>{
+    let th=seg.querySelector(':scope > .seg-thumb');
+    const fresh=!th;
+    if(fresh){ th=document.createElement('span'); th.className='seg-thumb'; th.setAttribute('aria-hidden','true'); seg.prepend(th); }
+    const on=seg.querySelector(':scope > button.on'), vis=!!(on&&on.offsetWidth);
+    // only touch the class when it changes, otherwise the observer below would loop
+    if(seg.classList.contains('has-thumb')!==vis) seg.classList.toggle('has-thumb',vis);   // hidden seg: buttons keep their own .on look
+    if(!vis){ th.style.opacity='0'; return; }
+    if(fresh||th.style.opacity==='0') th.style.transition='none';      // first placement: no slide in from 0,0
+    th.style.opacity='1';
+    th.style.width=on.offsetWidth+'px'; th.style.height=on.offsetHeight+'px';
+    th.style.transform=`translate(${on.offsetLeft}px,${on.offsetTop}px)`;
+    if(th.style.transition){ void th.offsetWidth; th.style.transition=''; }
+  };
+  const all=()=>document.querySelectorAll('.seg').forEach(place);
+  all();
+  new MutationObserver(ms=>{
+    const segs=new Set();
+    ms.forEach(m=>{
+      const t=m.target.nodeType===1?m.target:null; if(!t) return;
+      const s=t.closest('.seg'); if(s) segs.add(s);
+      t.querySelectorAll('.seg').forEach(x=>segs.add(x));                 // also catches a hidden parent being shown
+    });
+    segs.forEach(place);
+  }).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+  if(typeof ResizeObserver!=='undefined') new ResizeObserver(all).observe(document.body);
+}
+document.addEventListener('DOMContentLoaded',()=>{ decorateHero(); segThumbs(); document.querySelectorAll('input[data-ac]').forEach(attachAutocomplete); });
 
 /* ---------- multi-city round trips: HOME → A (stay) → B (stay) → HOME, live Ryanair fares ---------- */
 /* run fn over items, n at a time; a failed item is skipped. With a signal: stop starting new items once it is aborted, then throw "cancelled" */

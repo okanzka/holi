@@ -651,7 +651,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       ?'✈️ <b>All airlines</b>: Ryanair prices are <b>live</b>; other airlines (Pegasus, Wizz Air, SunExpress, THY, Lufthansa and more) come from <b>recent Aviasales searches</b> and can change. Multi-city routes still use Ryanair only. Always check the final price on the booking site.'
       :online?'ℹ️ <b>Ryanair only</b> in the online version. Every airline shows on the computer running <code>start.bat</code> (<code>http://localhost:8080</code>). Always check the final price on the booking site.'
       :'⚠️ <b>Only Ryanair right now.</b> To add every airline, close this tab and double-click <code>start.bat</code> in the site folder. It opens the site at <code>http://localhost:8080</code>.';
-    $('#calSrc').innerHTML=ok?'<span class="live-tag" style="background:#e3eefc;color:#1d4f91">All airlines</span>':H.alLogo('FR',true);
+    $('#calSrc').innerHTML=ok?'<span class="live-tag" style="background:var(--b-bg);color:var(--b-fg)">All airlines</span>':H.alLogo('FR',true);
     if(ok){ any.key=''; live.key=''; cal.data={}; cal.loaded=new Set(); cal.failed=new Set(); render(); } });   // filtering only: no new search needed
   document.querySelectorAll('#calView button').forEach(b=>b.onclick=()=>{ cal.view=b.dataset.v; H.save('calView',cal.view);
     cal.outMonth=T.start.slice(0,7); cal.backMonth=T.end.slice(0,7); renderCal(); });

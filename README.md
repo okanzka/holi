@@ -13,7 +13,6 @@ A personal trip planner with a holiday look. Pick a week, say how flexible you a
   - Airline logos, an airline filter and a "direct flights only" option.
 - **Hotels:** shifted stay dates, 7 hotel sites with your dates filled in, and a shortlist with price per night.
 - **Stay planner:** press 🏨 on any flight option. You go city by city with 5–6 hostel and hotel suggestions with real prices (Google Hotels via SerpApi), pick one per city, and get the total cost of stays + flights.
-- **Ask:** a Claude-powered assistant that checks live fares and recommends trips (uses your own Anthropic API key, kept in your browser).
 
 ## Prices
 

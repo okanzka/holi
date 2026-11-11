@@ -81,7 +81,7 @@ function renderShortlist(){
     const over=S.budget&&h.pn>+S.budget;
     const safeLink=/^https?:\/\//i.test(h.link)?h.link:'';
     return `<div class="item${i===0?' best':''}"><div>
-      <div class="t">${i===0?'🏆 ':''}${H.esc(h.name)}${h.rating?`<span class="stay-pill">⭐ ${h.rating}</span>`:''}${over?'<span class="stay-pill" style="background:#fde0d9;color:#9b2f1d">over budget</span>':''}</div>
+      <div class="t">${i===0?'🏆 ':''}${H.esc(h.name)}${h.rating?`<span class="stay-pill">⭐ ${h.rating}</span>`:''}${over?'<span class="stay-pill" style="background:var(--r-bg);color:var(--r-fg)">over budget</span>':''}</div>
       <div class="s">${H.esc(h.site)}${h.area?' · '+H.esc(h.area):''} · ${H.short(H.parse(h.ci))} → ${H.short(H.parse(h.co))} (${h.nights} nights)</div></div>
       <div class="row"><div><div class="amt">${H.money(h.pn,h.cur)}<span class="hint"> /night</span></div><div class="hint" style="text-align:right">${H.money(h.price,h.cur)} total</div></div>
       ${safeLink?`<a class="btn ghost sm" href="${H.esc(safeLink)}" target="_blank" rel="noopener">↗</a>`:''}

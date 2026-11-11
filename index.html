@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Heybe · Holiday Planner</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Pacifico&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#f2f5f9">
+<script>try{if(localStorage.getItem('heybe.theme')==='dark'){document.documentElement.dataset.theme='dark';document.querySelector('meta[name=theme-color]').content='#000000';}}catch(e){}</script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌴</text></svg>">
 </head>
@@ -14,11 +14,10 @@
   <a class="logo" href="index.html"><span>🌴</span>heybe</a>
   <ul><li><a class="link" data-page="home" href="index.html">Home</a></li>
       <li><a class="link" data-page="flights" href="flights.html">✈️ Flights</a></li>
-      <li><a class="link" data-page="hotels" href="hotels.html">🏨 Hotels</a></li>
-      <li><a class="link" data-page="ask" href="assistant.html">✨ Ask</a></li></ul>
+      <li><a class="link" data-page="hotels" href="hotels.html">🏨 Hotels</a></li></ul>
 </div></nav>
 
-<header class="hero"><div class="wrap">
+<header class="hero photo"><div class="wrap">
   <span class="eyebrow">☀️ Your holiday, packed</span>
   <h1>Where to <em>next</em>, traveler?</h1>
   <p class="lead">Pick your week, tell us how flexible you are, and we'll lay out every date combo, point you to the best-looking deals, and open them on all the big booking sites at once.</p>
@@ -55,7 +54,6 @@
   <div class="tiles">
     <a class="tile t1" href="flights.html"><span class="big">✈️</span><h3>Flight finder</h3><p>Live prices to every destination from your airport, a flexible date grid, and 8 booking sites.</p></a>
     <a class="tile t2" href="hotels.html"><span class="big">🏝️</span><h3>Hotel hunter</h3><p>Shift your stay, compare 7 hotel sites, keep a shortlist with real prices.</p></a>
-    <a class="tile t3" href="assistant.html"><span class="big">✨</span><h3>Ask Claude</h3><p>“Bana öneride bulun”: it checks live fares and recommends where to go.</p></a>
   </div>
 
   <section class="card" id="tips" style="margin-top:28px">

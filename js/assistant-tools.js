@@ -1,6 +1,6 @@
 /* ============ Heybe — assistant tools ============
-   Tool definitions + their implementation, shared by the in-page assistant
-   (assistant.js) and the MCP server for other agents (mcp/holi-mcp.js).
+   Tool definitions + their implementation, used by
+   the MCP server for other agents (mcp/holi-mcp.js).
    Needs airports.js, common.js and visa.js loaded first. */
 const HEYBE_TOOLS=(()=>{
 /* ---------------- tools Claude can use ---------------- */

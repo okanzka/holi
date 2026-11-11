@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Heybe · Flights</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Pacifico&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#f2f5f9">
+<script>try{if(localStorage.getItem('heybe.theme')==='dark'){document.documentElement.dataset.theme='dark';document.querySelector('meta[name=theme-color]').content='#000000';}}catch(e){}</script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>">
 </head>
@@ -14,11 +14,10 @@
   <a class="logo" href="index.html"><span>🌴</span>heybe</a>
   <ul><li><a class="link" data-page="home" href="index.html">Home</a></li>
       <li><a class="link" data-page="flights" href="flights.html">✈️ Flights</a></li>
-      <li><a class="link" data-page="hotels" href="hotels.html">🏨 Hotels</a></li>
-      <li><a class="link" data-page="ask" href="assistant.html">✨ Ask</a></li></ul>
+      <li><a class="link" data-page="hotels" href="hotels.html">🏨 Hotels</a></li></ul>
 </div></nav>
 
-<header class="hero small"><div class="wrap">
+<header class="hero small photo"><div class="wrap">
   <span class="eyebrow">✈️ Flight finder</span>
   <h1 id="routeTitle">Let's find your <em>wings</em></h1>
   <p class="lead" id="routeSub"></p>

@@ -11,7 +11,7 @@ from pathlib import Path
 import streamlit as st
 
 ROOT = Path(__file__).parent
-PAGES = ["index.html", "flights.html", "hotels.html", "assistant.html"]
+PAGES = ["index.html", "flights.html", "hotels.html"]
 NAV_RE = re.compile(r"""location\.href\s*=\s*(['"])([a-z]+\.html[^'"]*)\1""")
 
 # runs first inside every page: route clicks on local *.html links through the shell
