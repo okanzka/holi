@@ -86,6 +86,53 @@ async function hotelSearch(q){                                           // q: U
   } catch (e) { return out(502, { error: 'SerpApi unreachable: ' + e.message }); }
 }
 
+/* Live fares for every airline (Google Flights through SerpApi): one search per date pair, cached for an hour */
+const flightCache = new Map();
+async function flightLive(q){                                            // q: URLSearchParams with from, to, dep, ret?, adults, currency
+  const from = (q.get('from') || '').toUpperCase(), to = (q.get('to') || '').toUpperCase(), dep = q.get('dep') || '', ret = q.get('ret') || '';
+  const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v), isAp = v => /^[A-Z]{3}$/.test(v);
+  if (!isAp(from) || !isAp(to) || !isDate(dep) || (ret && (!isDate(ret) || ret < dep)))
+    return out(400, { error: 'from, to (airport codes) and dep are required; ret must be after dep' });
+  const key = serpKey();
+  if (!key) return out(503, { error: 'No SerpApi key. Put it in serpapi.key next to server.js.' });
+  const p = new URLSearchParams({ engine: 'google_flights', departure_id: from, arrival_id: to, outbound_date: dep, type: ret ? '1' : '2',
+    adults: String(Math.min(9, Math.max(1, +q.get('adults') || 1))), currency: (q.get('currency') || 'EUR').toUpperCase().slice(0, 3), hl: 'en', gl: 'de' });
+  if (ret) p.set('return_date', ret);
+  const ck = p.toString(), hit = flightCache.get(ck);
+  if (hit && Date.now() - hit.t < 3600 * 1000) return out(200, hit.body);
+  p.set('api_key', key);
+  try {
+    const r = await fetch('https://serpapi.com/search.json?' + p, { signal: AbortSignal.timeout(30000) });
+    const j = await r.json();
+    if (!r.ok || j.error) return out(r.ok ? 502 : r.status, { error: j.error || ('SerpApi ' + r.status) });
+    const flights = [...(j.best_flights || []), ...(j.other_flights || [])].filter(f => f.price).map(f => ({
+      price: f.price, duration: f.total_duration || null, stops: Math.max(0, (f.flights || []).length - 1),
+      airlines: [...new Set((f.flights || []).map(l => l.airline).filter(Boolean))],
+      logo: (f.flights || [])[0] && f.flights[0].airline_logo || null,
+      legs: (f.flights || []).map(l => ({ from: l.departure_airport && l.departure_airport.id, to: l.arrival_airport && l.arrival_airport.id,
+        dep: l.departure_airport && l.departure_airport.time, arr: l.arrival_airport && l.arrival_airport.time, airline: l.airline, no: l.flight_number })),
+    })).sort((a, b) => a.price - b.price);
+    const pi = j.price_insights || {};
+    const body = JSON.stringify({ ok: true, flights, roundTrip: !!ret, link: j.search_metadata && j.search_metadata.google_flights_url || null,
+      level: pi.price_level || null, typical: pi.typical_price_range || null, at: Date.now() });
+    flightCache.set(ck, { t: Date.now(), body });
+    return out(200, body);
+  } catch (e) { return out(502, { error: 'SerpApi unreachable: ' + e.message }); }
+}
+
+/* how much of the monthly SerpApi quota is left (the account page itself is free) */
+async function serpUsage(){
+  const key = serpKey();
+  if (!key) return out(503, { error: 'No SerpApi key.' });
+  try {
+    const r = await fetch('https://serpapi.com/account.json?api_key=' + encodeURIComponent(key), { signal: AbortSignal.timeout(10000) });
+    const j = await r.json();
+    if (!r.ok || j.error) return out(502, { error: j.error || ('SerpApi ' + r.status) });
+    const left = j.total_searches_left != null ? j.total_searches_left : j.plan_searches_left;
+    return out(200, { ok: true, used: j.this_month_usage, limit: j.searches_per_month, left });
+  } catch (e) { return out(502, { error: 'SerpApi unreachable: ' + e.message }); }
+}
+
 function serveFile(res, url){
   let p = decodeURIComponent(url.pathname);
   if (p === '/') p = '/index.html';
@@ -106,7 +153,7 @@ function openBrowser(){
   exec(cmd, () => {});
 }
 
-module.exports = { tpGet, hotelSearch };
+module.exports = { tpGet, hotelSearch, flightLive, serpUsage };
 if (require.main !== module) return;                                      // required as a library: don't start the server
 
 const reply = (res, p) => p.then(r => send(res, r.status, r.body));
@@ -115,6 +162,8 @@ const server = http.createServer((req, res) => {
   if (req.method !== 'GET') return send(res, 405, 'Method not allowed', 'text/plain');
   if (url.pathname.startsWith('/tp/')) return reply(res, tpGet(url.pathname.slice(3), url.search));
   if (url.pathname === '/hotels/search') return reply(res, hotelSearch(url.searchParams));
+  if (url.pathname === '/flights/live') return reply(res, flightLive(url.searchParams));
+  if (url.pathname === '/serpapi/usage') return reply(res, serpUsage());
   serveFile(res, url);
 });
 server.on('error', e => {

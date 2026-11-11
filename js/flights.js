@@ -275,13 +275,49 @@ function renderMatrix(C){
   m.querySelectorAll('td[data-k]').forEach(td=>td.onclick=()=>{ const [d,r]=td.dataset.k.split('|'); select(C.find(c=>c.ds===d&&(c.rs||'')===r)); });
 }
 
+/* live price for one date pair, every airline: Google Flights through SerpApi on the local server (1 search from the monthly quota) */
+const liveRes={}, livePending=new Set();
+const liveKey=c=>T.from+T.to+c.ds+'|'+(c.rs||'');
+async function liveQuota(){ try{ const r=await NET.json('/serpapi/usage',{},8000);
+  if(r.ok&&r.data&&r.data.ok&&r.data.left!=null) $('#liveQuota').textContent=`Google Flights, right now. ${r.data.left} of ${r.data.limit} live searches left this month.`; }catch(e){} }
+function liveHtml(d){
+  if(!d.flights.length) return '<div class="empty">Google Flights has no flights on these dates.</div>';
+  const hm=s=>s?s.slice(11,16):'', lvl={low:'🟢 Cheaper than usual',typical:'🟡 Typical price',high:'🔴 Pricier than usual'}[d.level];
+  return `<p class="sub">${lvl?lvl+' · ':''}${d.roundTrip?'Round-trip price (outbound flight shown)':'One-way price'} · total for ${pax()} traveller${pax()>1?'s':''} · checked ${new Date(d.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p>
+    <div class="live-list">${d.flights.slice(0,8).map(f=>{ const a=f.legs[0]||{}, z=f.legs[f.legs.length-1]||{};
+      return `<div class="live-row"><b>${H.money(f.price,T.currency)}</b><span>${H.esc(f.airlines.join(' + '))}</span><span>${hm(a.dep)}–${hm(z.arr)} · ${f.stops?f.stops+' stop'+(f.stops>1?'s':''):'direct'}</span></div>`; }).join('')}</div>
+    ${d.link?`<a class="btn ghost sm" target="_blank" rel="noopener" href="${H.esc(d.link)}">Book on Google Flights ↗</a>`:''}`;
+}
+function liveSetup(c){
+  const k=liveKey(c), ok=/^[A-Z]{3}$/.test(T.from)&&/^[A-Z]{3}$/.test(T.to);
+  $('#liveBox').classList.toggle('hidden',!ok); if(!ok) return;
+  $('#liveRes').innerHTML=livePending.has(k)?'<p class="sub">Asking Google Flights…</p>':liveRes[k]?liveHtml(liveRes[k]):'';
+  liveQuota();
+  $('#liveBtn').onclick=async()=>{
+    if(livePending.has(k)) return; livePending.add(k); $('#liveRes').innerHTML='<p class="sub">Asking Google Flights…</p>';
+    let html;
+    try{ const r=await NET.json('/flights/live?'+new URLSearchParams({from:T.from,to:T.to,dep:c.ds,ret:c.rs||'',adults:pax(),currency:T.currency}),{},35000);
+      if(!r.ok||!r.data||!r.data.ok) throw Object.assign(new Error((r.data&&r.data.error)||'HTTP '+r.status),{status:r.status});
+      liveRes[k]=r.data; html=liveHtml(r.data); liveQuota();
+    }catch(e){
+      html=`<div class="empty">${location.protocol==='about:'?'Live prices for all airlines work only on the computer running start.bat.'
+        :e.status===404?'Close the start.bat window and open it again to turn on live prices.'
+        :e.status===503?'Live prices need a SerpApi key in serpapi.key next to server.js.'
+        :e.message==='Request timed out'?'Google Flights took too long. Try again.'
+        :e.status?'Live price unavailable: '+H.esc(e.message):'Live prices need the local server: double-click start.bat.'}</div>`;
+    }
+    livePending.delete(k);
+    if(selected&&liveKey(selected)===k) $('#liveRes').innerHTML=html;     // still looking at the same dates
+  };
+}
+
 function select(c){ selected={ds:c.ds,rs:c.rs}; renderRoute(); $('#detail').scrollIntoView({behavior:'smooth',block:'start'}); }
 function showDetail(c,hasLive){
   const o=opts(c.ds,c.rs), sites=hasLive?[RY_SITE,...FLIGHT_SITES]:FLIGHT_SITES;
   $('#dTitle').innerHTML=`✈️ ${H.nice(c.dep)}${c.ret?' → '+H.nice(c.ret):''}`;
   $('#dSub').textContent=`${T.from} → ${T.to}${c.ret?' · '+c.nights+' nights':''} · ${shiftText(c)}`+
     (c.liveTotal!=null?` · live fare: ${H.money(c.livePP,c.liveCur)} pp, ≈ ${H.money(c.liveTotal,c.liveCur)} total`:` · estimate: ${TIER_LABEL[tier(c.score)].toLowerCase()}`);
-  $('#dSites').innerHTML=siteButtons(sites,o);
+  $('#dSites').innerHTML=siteButtons(sites,o); liveSetup(c);
   $('#fSite').innerHTML=sites.map(s=>`<option>${s.name}</option>`).join('')+'<option>Airline website</option><option>Other</option>';
   $('#fPrice').value=c.fare?c.fare.price:''; $('#fNote').value=c.fare?c.fare.note||'':''; if(c.fare) $('#fSite').value=c.fare.site;
   $('#openAll').onclick=()=>openAll(sites,o);

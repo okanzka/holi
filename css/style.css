@@ -458,3 +458,11 @@ img.flag{width:22px;height:auto;border-radius:3px;vertical-align:-3px;box-shadow
 .st-total .grand small,.st-total .grand span{color:rgba(255,255,255,.75)}
 .st-total .grand b{color:var(--sun-l);display:block}
 .item.missing{opacity:.7;border-style:dashed}
+
+/* live price (all airlines) in the flight detail panel */
+.live-box{border:2px solid var(--sand-2);border-radius:16px;padding:12px 14px;margin:12px 0;display:flex;flex-direction:column;gap:8px}
+.live-box .sub{margin:0}
+.live-list{display:flex;flex-direction:column;gap:4px}
+.live-row{display:grid;grid-template-columns:90px 1fr auto;gap:10px;align-items:center;padding:6px 10px;background:var(--sand);border-radius:10px;font-size:.92rem}
+.live-row:first-child{outline:2px solid var(--ocean)}
+@media (max-width:560px){ .live-row{grid-template-columns:76px 1fr;row-gap:2px} .live-row span:last-child{grid-column:2;color:var(--muted);font-size:.85rem} }
