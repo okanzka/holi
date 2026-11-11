@@ -15,7 +15,7 @@ function load(...files) {
   // top-level const/let stay in the script scope, so hand them back explicitly
   const names = '({H, AP, STAYS: typeof STAYS !== "undefined" ? STAYS : null, AIRLINES,' +
     ' RYANAIR: typeof RYANAIR !== "undefined" ? RYANAIR : null, MULTI: typeof MULTI !== "undefined" ? MULTI : null,' +
-    ' NET: typeof NET !== "undefined" ? NET : null})';
+    ' NET: typeof NET !== "undefined" ? NET : null, TP: typeof TP !== "undefined" ? TP : null})';
   vm.runInContext(src + '\n;' + names, ctx);
   return vm.runInContext(names, ctx);
 }

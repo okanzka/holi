@@ -85,7 +85,7 @@ async function loadAnywhere(){
     d.fit=Math.abs(H.diff(s,H.parse(d.dep)))+(d.ret?Math.abs(H.diff(e,H.parse(d.ret))):0);
     d.total=d.pp*pax(); return d; });
   any.origins=origins; any.loading=false;
-  if(!any.deals.length&&failed===origins.length) any.error='Could not load fares. Check your internet connection and try again.';
+  if(!any.deals.length&&origins.length&&failed===origins.length) any.error='Could not load fares. Check your internet connection and try again.';
   renderAnywhere();
 }
 
@@ -103,7 +103,7 @@ function renderAnywhere(){
   const visaOk=any.deals.filter(d=>VISA.pass(d.pCode));
   renderAlChips(visaOk);
   const all=visaOk.filter(alOk);
-  const hidden=any.deals.length-all.length;
+  const hidden=any.deals.length-visaOk.length;   // the airline chips are a separate filter
   const origNames=fromAny?`${any.origins.length} cities`:fromCountry?`${any.origins.length} airports in ${H.cityOf(T.from)}`:any.origins.join(', ');
   $('#anySub').textContent = all.length
     ? `${all.length} option${all.length>1?'s':''}${hidden?` (${hidden} hidden by the visa filter)`:''} found from ${origNames}${T.to!=='ANY'?' to '+H.cityOf(T.to):''}, leaving ${H.short(H.parse(r.outFrom))}–${H.short(H.parse(r.outTo))}${T.tripType==='rt'?`, returning ${H.short(H.parse(r.inFrom))}–${H.short(H.parse(r.inTo))}`:''}. Prices per person.`
@@ -125,7 +125,7 @@ function renderAnywhere(){
       <div style="margin-top:6px">${VISA.badge(d.pCode)}</div>
       <div class="price">${H.money(d.pp,d.cur)}<span class="hint"> / person</span></div>
       <div class="meta">${H.nice(H.parse(d.dep))} ${H.time(d.outDep)}${d.ret?` → ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} · ${d.nights} nights`:''}</div>
-      <div class="meta">${H.alLogo(H.carrier(d.outFlight),true)} <span class="fn">${H.esc([d.outFlight,d.inFlight].filter(Boolean).join(' / '))}</span> ${stopTag(d)}</div>
+      <div class="meta">${H.alLogo(alOf(d),true)} <span class="fn">${H.esc([d.outFlight,d.inFlight].filter(Boolean).join(' / '))}</span> ${stopTag(d)}</div>
       <div class="meta">≈ ${H.money(d.total,d.cur)} for ${pax()} traveller${pax()>1?'s':''}</div>
       <div class="actions">
         <a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(dealBook(d))}">Book${d.src==='tp'?'':' on Ryanair'} ↗</a>
@@ -135,7 +135,7 @@ function renderAnywhere(){
   bindDealButtons($('#anyPicks'));
 }
 
-const alOf=d=>H.carrier(d.outFlight);
+const alOf=d=>H.alOf(d);
 const alOk=d=>!any.alSel||!any.alSel.size||any.alSel.has(alOf(d));
 function renderAlChips(list){
   const cnt={}; list.forEach(d=>{ const c=alOf(d); cnt[c]=(cnt[c]||0)+1; });
@@ -162,7 +162,7 @@ function renderDealList(){
   $('#deals').innerHTML=L.map(d=>`<div class="deal">
       <span class="fl">${H.flag(d.cc)||'✈️'}</span>
       <div><div class="t">${H.esc(d.pCity)}<small>${H.esc(d.pCountry)} · ${d.pCode}</small>${d.tag?`<span class="from-tag">${d.tag}</span>`:''} ${VISA.badge(d.pCode)}</div>
-        <div class="s">${H.alLogo(H.carrier(d.outFlight),true)} ${stopTag(d)} 🛫 ${H.nice(H.parse(d.dep))} ${H.time(d.outDep)} <span class="fn">${H.esc(d.outFlight||'')}</span>${d.ret?` &nbsp;🛬 ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} <span class="fn">${H.esc(d.inFlight||'')}</span> · ${d.nights} nights`:' · one way'}</div></div>
+        <div class="s">${H.alLogo(alOf(d),true)} ${stopTag(d)} 🛫 ${H.nice(H.parse(d.dep))} ${H.time(d.outDep)} <span class="fn">${H.esc(d.outFlight||'')}</span>${d.ret?` &nbsp;🛬 ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} <span class="fn">${H.esc(d.inFlight||'')}</span> · ${d.nights} nights`:' · one way'}</div></div>
       <div class="amt">${H.money(d.pp,d.cur)}<small>per person · ≈ ${H.money(d.total,d.cur)} total</small></div>
       <div class="acts">
         <a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(dealBook(d))}">Book ↗</a>
@@ -590,7 +590,7 @@ function render(){
 
 document.addEventListener('DOMContentLoaded',()=>{
   const qp=new URLSearchParams(location.search), patch={};
-  ['from','to','start','end'].forEach(k=>{ if(qp.get(k)) patch[k]=k.length<4?qp.get(k).toUpperCase():qp.get(k); });
+  Object.assign(patch,H.urlPatch(qp));
   if(patch.to) patch.city=H.hotelCity(patch.to);
   if(/^(week|month)$/.test(qp.get('cal')||'')) cal.view=qp.get('cal');
   if(/^(rt|ow|mc|via)$/.test(qp.get('trip')||'')) patch.tripType=qp.get('trip');

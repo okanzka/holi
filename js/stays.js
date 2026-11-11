@@ -1,5 +1,5 @@
 /* ============ Heybe — stay planner ============
-   Pick a flight option → one stay per city of that trip (5–6 suggestions each),
+   Pick a flight option → one stay per city of that trip (12 suggestions each, more on request),
    choose one per city, then see the total accommodation (and trip) cost.
    Suggestions with prices come from Google Hotels via SerpApi through server.js
    (key in serpapi.key). Without it, every city still gets ready-made search links
@@ -36,31 +36,50 @@ const STAYS = {
   async available(){
     if(this._svc!==null) return this._svc;
     if(!/^https?:$/.test(location.protocol)) return (this._svc=false);
-    try{ const r=await NET.json('/tp/health',{},5000); this._svc=!!(r.data&&r.data.hotels); }catch(e){ this._svc=false; }
+    // two sources: Google Hotels (needs the SerpApi key) and the free one (Wikidata + Xotelo, no key)
+    try{ const d=(await NET.json('/tp/health',{},5000)).data||{}; this._svc=(d.hotels||d.freeHotels)?{serp:!!d.hotels,free:!!d.freeHotels}:false; }catch(e){ this._svc=false; }
     return this._svc;
   },
   async search(c,adults,cur){
-    const ck='hotels:'+[c.city,c.ci,c.co,adults,cur].join('|'), hit=H.load(ck,null);
+    const ck='stays2:'+[c.city,c.ci,c.co,adults,cur].join('|'), hit=H.load(ck,null);
     if(hit&&Date.now()-hit.t<6*3600e3) return hit.list;               // save the free search quota
-    const r=await NET.json('/hotels/search?'+new URLSearchParams({q:`hostels and hotels in ${c.city}`,ci:c.ci,co:c.co,adults,currency:cur}),{},30000);
-    const j=r.data||{}; if(!r.ok||!j.ok) throw new Error(j.error||'Hotel search failed');
-    H.save(ck,{t:Date.now(),list:j.properties}); return j.properties;
+    const svc=(await this.available())||{};
+    const ask=(path,q)=>NET.json(path+'?'+new URLSearchParams({q,ci:c.ci,co:c.co,adults,currency:cur}),{},60000)
+      .then(r=>{ const j=r.data||{}; if(!r.ok||!j.ok) throw new Error(j.error||'Hotel search failed'); return j.properties||[]; });
+    const res=await Promise.allSettled([svc.serp?ask('/hotels/search',`hostels and hotels in ${c.city}`):Promise.reject(new Error('Hotel search is not set up')),
+      svc.free?ask('/hotels/free',c.city):Promise.reject(new Error('Hotel search is not set up'))]);
+    const ok=res.filter(r=>r.status==='fulfilled');
+    if(!ok.length) throw res[0].reason;                                 // one source failing is fine, both is an error
+    const list=this.merge(...ok.map(r=>r.value));
+    if(ok.length===res.length||list.length) H.save(ck,{t:Date.now(),list});
+    return list;
+  },
+  /* one list from several sources: the same place is kept once, with its cheapest price and whatever details either source has */
+  merge(...lists){
+    const m=new Map(), key=p=>AP.norm(p.name).replace(/[^a-z0-9]/g,''), cost=p=>p.total||p.night||Infinity;
+    lists.flat().forEach(p=>{ const k=key(p), o=m.get(k);
+      if(!o){ m.set(k,{...p}); return; }
+      const [win,lose]=cost(p)<cost(o)?[p,o]:[o,p], out={...win};
+      for(const f in lose) if(out[f]==null||out[f]==='') out[f]=lose[f];
+      m.set(k,out); });
+    return [...m.values()];
   },
   isHostel(p){ return /hostel|backpack|dorm|bunk|auberge|albergue|ostello|jugendherberge|youth/i.test((p.name||'')+' '+(p.description||'')+' '+(p.type||'')); },
-  /* 5–6 suggestions: cheapest well-rated ones, mixing hostels and hotels when "both" */
-  pick6(props,kind,nights){
+  /* up to `max` suggestions: cheapest well-rated ones, mixing hostels and hotels when "both" */
+  pick(props,kind,nights,max=12){
+    const half=Math.ceil(max/2);
     const all=(props||[]).filter(p=>p.rating==null||p.rating>=3.5).map(p=>({...p,hostel:STAYS.isHostel(p),tot:p.total||(p.night?p.night*nights:null)}))
       .filter(p=>kind==='hostel'?p.hostel:kind==='hotel'?!p.hostel:true);
     const priced=all.filter(p=>p.tot), unpriced=all.filter(p=>!p.tot).sort((a,b)=>(b.rating||0)-(a.rating||0));
     const hs=priced.filter(p=>p.hostel).sort((a,b)=>a.tot-b.tot), ht=priced.filter(p=>!p.hostel).sort((a,b)=>a.tot-b.tot);
-    let list=kind==='both'?[...hs.slice(0,3),...ht].slice(0,6):[...hs,...ht].slice(0,6);
-    if(kind==='both'&&list.length<6) list=[...list,...hs.slice(3)].slice(0,6);
+    let list=kind==='both'?[...hs.slice(0,half),...ht].slice(0,max):[...hs,...ht].slice(0,max);
+    if(kind==='both'&&list.length<max) list=[...list,...hs.slice(half)].slice(0,max);
     list.sort((a,b)=>a.tot-b.tot);
-    // Google often has no rate for some places on given dates: fill up with the best-rated of those
-    if(list.length<6){
+    // some places have no rate on the given dates: fill up with the best-rated of those
+    if(list.length<max){
       const h2=unpriced.filter(p=>p.hostel), o2=unpriced.filter(p=>!p.hostel);
       const extra=kind==='both'?[...h2.slice(0,2),...o2,...h2.slice(2)]:unpriced;
-      list=[...list,...extra.slice(0,6-list.length).map(p=>({...p,noPrice:true}))];
+      list=[...list,...extra.slice(0,max-list.length).map(p=>({...p,noPrice:true}))];
     }
     return list;
   },
@@ -141,27 +160,33 @@ async function fillSuggestions(grid,c,P,choose){
   if(!(await STAYS.available())){
     grid.innerHTML=location.protocol==='about:'
       ? `<div class="empty" style="grid-column:1/-1">ℹ️ Hotel suggestions with prices need the local server, so they show only on the computer running <code>start.bat</code>.<br>Here, open one of the sites below, pick a place, and enter it; the totals still work.</div>`
-      : `<div class="empty" style="grid-column:1/-1">🔑 Automatic suggestions with prices need a free <b>SerpApi</b> key (Google Hotels data).
-      Put it in <code>serpapi.key</code> in the site folder and restart <code>start.bat</code>.<br>Until then, open one of the sites below, pick a place, and enter it here; the totals still work.</div>`;
+      : `<div class="empty" style="grid-column:1/-1">Automatic suggestions with prices need the local server. Close the <code>start.bat</code> window and open it again.<br>Until then, open one of the sites below, pick a place, and enter it here; the totals still work.</div>`;
     return;
   }
   let props;
   try{ props=await STAYS.search(c,P.adults,P.cur); }
   catch(e){ grid.innerHTML=`<div class="empty" style="grid-column:1/-1">Could not load suggestions: ${H.esc(e.message)}. Use the sites below instead.</div>`; return; }
-  const list=STAYS.pick6(props,P.kind||'both',c.nights);
-  if(!list.length){ grid.innerHTML=`<div class="empty" style="grid-column:1/-1">No priced ${P.kind==='hostel'?'hostels':P.kind==='hotel'?'hotels':'places'} found for these dates. Try another filter or the sites below.</div>`; return; }
-  const cur=P.cur, pick=P.picks[P.cities.indexOf(c)];
+  const kind=P.kind||'both', short=STAYS.pick(props,kind,c.nights,12), full=STAYS.pick(props,kind,c.nights,36);
+  if(!short.length){ grid.innerHTML=`<div class="empty" style="grid-column:1/-1">No ${kind==='hostel'?'hostels':kind==='hotel'?'hotels':'places'} found for these dates. Try another filter or the sites below.</div>`; return; }
+  drawSuggestions(grid,c,P,choose,short,full);
+}
+
+/* the cards; with more places than fit, a button at the end shows them all */
+function drawSuggestions(grid,c,P,choose,list,full){
+  const cur=P.cur, pick=P.picks[P.cities.indexOf(c)], more=full.length-list.length;
   grid.innerHTML=list.map((h,i)=>`<div class="st-card${pick&&pick.name===h.name?' chosen':''}">
       <div class="st-img"${h.image?` style="background-image:url('${H.esc(h.image)}'),linear-gradient(135deg,var(--lagoon),var(--sun-l))"`:''}><span class="st-type">${h.hostel?'🛏️ Hostel':'🏨 Hotel'}</span></div>
       <div class="st-body"><b class="st-name">${H.esc(h.name)}</b>
         <div class="s">${h.stars?'★'.repeat(Math.min(5,h.stars))+' · ':''}${h.rating?`⭐ ${(+h.rating).toFixed(1)}${h.reviews?` (${h.reviews.toLocaleString('en-US')})`:''}`:'no rating yet'}</div>
         ${h.noPrice
-          ?`<div class="st-price"><span>No price for these dates on Google. Check it, then enter the total:</span></div>
-            <div class="row" style="gap:6px;margin-top:6px"><input type="number" min="0" step="1" placeholder="Total €" data-p="${i}" style="width:110px;padding:8px 10px">
+          ?`<div class="st-price"><span>No price found for these dates. Check it, then enter the total:</span></div>
+            <div class="row" style="gap:6px;margin-top:6px"><input type="number" min="0" step="1" placeholder="Total ${H.esc(cur)}" data-p="${i}" style="width:110px;padding:8px 10px">
             <button class="btn primary sm" data-i="${i}">Choose</button><a class="btn ghost sm" href="${H.esc(h.link||`https://www.google.com/travel/search?q=${encodeURIComponent(h.name+' '+c.city)}`)}" target="_blank" rel="noopener">Check price ↗</a></div>`
           :`<div class="st-price"><b>${H.money(h.tot,cur)}</b><span>${H.money(h.tot/c.nights,cur)} / night${h.source?` · ${H.esc(h.source)}`:''}</span></div>
             <div class="row" style="gap:6px;margin-top:8px"><button class="btn primary sm" data-i="${i}">Choose</button>${h.link?`<a class="btn ghost sm" href="${H.esc(h.link)}" target="_blank" rel="noopener">View ↗</a>`:''}</div>`}
-      </div></div>`).join('');
+      </div></div>`).join('')
+    +(more>0?`<div style="grid-column:1/-1;text-align:center"><button type="button" class="btn ghost sm" data-more>Show ${more} more place${more>1?'s':''}</button></div>`:'');
+  const mb=grid.querySelector('[data-more]'); if(mb) mb.onclick=()=>drawSuggestions(grid,c,P,choose,full,full);
   grid.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i, h=list[i];
     let total=h.tot;
     if(h.noPrice){ const inp=grid.querySelector(`[data-p="${i}"]`); total=parseFloat(inp.value);

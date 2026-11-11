@@ -47,6 +47,16 @@ const H = {
   isDealMode(t){ return t.to==='ANY'||t.from==='ANY'||H.isCountry(t.to)||H.isCountry(t.from); },
   /* airline from a flight number ("FR7937" → FR); Ryanair fares without a number are FR */
   carrier(fn){ const m=String(fn||'').match(/^([A-Z0-9]{2})\s*\d/); return m?m[1]:'FR'; },
+  /* airline of a fare: its own code when the source gives one (a fare can come without a flight number) */
+  alOf(d){ return (d&&d.airline)||H.carrier(d&&d.outFlight); },
+  /* trip details passed in the page address (?from=nue&to=ist&start=…): only known places and real dates are kept */
+  urlPatch(qp){
+    const patch={}, place=v=>{ const c=String(v||'').toUpperCase(); return c==='ANY'||AP.byCode(c)?c:''; };
+    const day=v=>{ if(!/^\d{4}-\d{2}-\d{2}$/.test(v||'')) return ''; const d=H.parse(v); return H.fmt(d)===v?v:''; };
+    ['from','to'].forEach(k=>{ const c=place(qp.get(k)); if(c) patch[k]=c; });
+    ['start','end'].forEach(k=>{ const d=day(qp.get(k)); if(d) patch[k]=d; });
+    return patch;
+  },
   alLogo(code,withName){ code=code||'FR'; const n=AIRLINES[code]||code;
     return `<span class="al" title="${H.esc(n)}"><img src="https://images.kiwi.com/airlines/64/${code}.png" onerror="this.onerror=null;this.src='https://pics.avs.io/64/64/${code}.png'" alt="${H.esc(n)}" loading="lazy">${withName?`<b>${H.esc(n)}</b>`:''}</span>`; },
   flag(cc){ return /^[A-Za-z]{2}$/.test(cc||'')?`<img class="flag" src="https://flagcdn.com/w40/${cc.toLowerCase()}.png" alt="${cc}" loading="lazy">`:''; },
@@ -544,12 +554,28 @@ const TP = {
       stops:x.transfers||0,rstops:x.return_transfers||0,link:x.link?'https://www.aviasales.com'+x.link:null};
   },
   inRange:(iso,a,b)=>{ const d=String(iso||'').slice(0,10); return d>=a&&d<=b; },
+  days(a,b){ const out=[]; for(let d=H.parse(a), e=H.parse(b); d<=e&&out.length<10; d=H.add(d,1)) out.push(H.fmt(d)); return out; },
+  /* Without a destination the month search returns only the overall cheapest fares, so most airlines never appear.
+     Asking each departure day for the cheapest fare per destination (unique=true) fills those in.
+     A day that fails is skipped: the month search already gave a result. */
+  async everywhere(base,outFrom,outTo,signal){
+    const rows=await Promise.all(this.days(outFrom,outTo).map(d=>
+      this.get('/aviasales/v3/prices_for_dates',{...base,departure_at:d,unique:'true'},signal).catch(()=>[])));
+    NET.check(signal);
+    return rows.flat().filter(Boolean);
+  },
   async roundTrips({from,to,outFrom,outTo,inFrom,inTo,minN,maxN,currency,direct,signal}){
     const out=[];
     for(const m1 of this.months(outFrom,outTo)) for(const m2 of this.months(inFrom,inTo)){
       const rows=await this.get('/aviasales/v3/prices_for_dates',{origin:from||'',destination:to||'',departure_at:m1,return_at:m2,
         one_way:'false',direct:direct?'true':'false',sorting:'price',unique:'false',limit:1000,currency:(currency||'EUR').toLowerCase()},signal);
       (rows||[]).forEach(x=>{ if(!this.inRange(x.departure_at,outFrom,outTo)||!this.inRange(x.return_at,inFrom,inTo)) return;
+        const n=H.diff(H.parse(x.departure_at.slice(0,10)),H.parse(x.return_at.slice(0,10)));
+        if(n<(minN||1)||n>(maxN||60)) return; out.push(this.norm(x,currency)); });
+    }
+    if(!to) for(const m2 of this.months(inFrom,inTo)){
+      const rows=await this.everywhere({origin:from||'',return_at:m2,one_way:'false',direct:direct?'true':'false',sorting:'price',limit:1000,currency:(currency||'EUR').toLowerCase()},outFrom,outTo,signal);
+      rows.forEach(x=>{ if(!x.return_at||!this.inRange(x.departure_at,outFrom,outTo)||!this.inRange(x.return_at,inFrom,inTo)) return;
         const n=H.diff(H.parse(x.departure_at.slice(0,10)),H.parse(x.return_at.slice(0,10)));
         if(n<(minN||1)||n>(maxN||60)) return; out.push(this.norm(x,currency)); });
     }
@@ -562,6 +588,8 @@ const TP = {
         direct:direct?'true':'false',sorting:'price',unique:'false',limit:1000,currency:(currency||'EUR').toLowerCase()},signal);
       (rows||[]).forEach(x=>{ if(this.inRange(x.departure_at,outFrom,outTo)) out.push(this.norm(x,currency)); });
     }
+    if(!to) (await this.everywhere({origin:from||'',one_way:'true',direct:direct?'true':'false',sorting:'price',limit:1000,currency:(currency||'EUR').toLowerCase()},outFrom,outTo,signal))
+      .forEach(x=>{ if(this.inRange(x.departure_at,outFrom,outTo)) out.push(this.norm(x,currency)); });
     return out;
   },
   /* cheapest one-way per day for a route: {YYYY-MM-DD:{price,cur,dep,airline,flight,stops,link}} */
