@@ -84,3 +84,46 @@ test('each destination keeps the cheapest non-Ryanair fare next to a cheaper Rya
   assert.equal(best.get('BCN').alt, undefined);                // the best is not Ryanair: nothing to add
   assert.ok(H.isRyanair({ src: 'ryanair' }) && H.isRyanair({ src: 'tp', airline: 'RK' }) && !H.isRyanair({ src: 'tp', airline: 'W6' }));
 });
+
+test('round trips are built from two one-way fares: cheapest per destination, inside the windows and night limits', () => {
+  const { TP, H } = load('airports.js', 'common.js');
+  const outs = [
+    { src: 'tp', origin: 'NUE', dest: 'AYT', outDep: '2026-12-05T08:00:00+01:00', pp: 65, airline: 'PC', outFlight: 'PC1', cur: 'EUR' },
+    { src: 'tp', origin: 'NUE', dest: 'AYT', outDep: '2026-12-09T08:00:00+01:00', pp: 40, airline: 'XQ', outFlight: 'XQ2', cur: 'EUR' },
+    { src: 'tp', origin: 'NUE', dest: 'BUD', outDep: '2026-12-02T08:00:00+01:00', pp: 30, airline: 'W6', outFlight: 'W63', cur: 'EUR' },
+  ];
+  const backs = {
+    AYT: { '2026-12-12': { price: 50, dep: '2026-12-12T10:00:00+03:00', airline: 'PC', flight: 'PC9', stops: 0 },   // 3 nights after the 9th: too short
+           '2026-12-19': { price: 70, dep: '2026-12-19T10:00:00+03:00', airline: 'PC', flight: 'PC8', stops: 1 },
+           '2026-12-31': { price: 10, dep: '2026-12-31T10:00:00+03:00', airline: 'PC', flight: 'PC7', stops: 0 } },  // outside the return window
+    BUD: {},
+  };
+  const r = TP.combine(outs, backs, { inFrom: '2026-12-10', inTo: '2026-12-20', minN: 7, maxN: 14 });
+  assert.equal(r.length, 1);                                        // BUD has no way back
+  const a = r[0];
+  assert.equal(a.dest, 'AYT'); assert.equal(a.pp, 110);              // XQ 40 on the 9th + PC 70 on the 19th
+  assert.equal(a.airline, 'XQ'); assert.equal(a.inAirline, 'PC'); assert.equal(a.inFlight, 'PC8');
+  assert.equal(a.rstops, 1); assert.ok(a.mixed); assert.equal(a.inDep.slice(0, 10), '2026-12-19');
+  assert.ok(H.isRyanair({ src: 'tp', airline: 'PC', inAirline: 'FR' }));   // a Ryanair leg makes it a Ryanair trip
+  assert.ok(!H.isRyanair(a));
+});
+
+test('opened as a file or inside Streamlit, the page asks the local server at 127.0.0.1:8080', async () => {
+  const urls = [];
+  const fakeFetch = async u => { urls.push(u); return { ok: true, status: 200, json: async () => ({ ok: true, token: true }) }; };
+  const { NET, TP } = load('airports.js', 'common.js', { fetch: fakeFetch });   // the test sandbox runs as file:
+  await NET.json('/tp/health');
+  await NET.json('https://services-api.ryanair.com/x');
+  assert.deepStrictEqual(urls, ['http://127.0.0.1:8080/tp/health', 'https://services-api.ryanair.com/x']);
+  TP._ok = null; assert.strictEqual(await TP.available(), true);
+});
+
+test('the local server lets only local pages (file, Streamlit on localhost) read its answers', () => {
+  const ok = o => server.corsOrigin(o);
+  assert.equal(ok('null'), 'null');                          // a page opened as a file
+  assert.equal(ok('http://localhost:8501'), 'http://localhost:8501');   // Streamlit run locally
+  assert.equal(ok('http://127.0.0.1:8501'), 'http://127.0.0.1:8501');
+  assert.equal(ok('https://evil.example'), null);
+  assert.equal(ok('http://localhost.evil.example'), null);
+  assert.equal(ok(undefined), null);
+});

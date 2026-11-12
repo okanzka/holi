@@ -63,6 +63,8 @@ async function loadAnywhere(){
     const qs=fromAny?(toAirport?[{from:null,to:toAirport}]:AP.inCountry(toCC,8).map(a=>({from:null,to:a.code})))
       :origins.slice(0,fromCountry?10:origins.length).map(o=>({from:o,to:toAirport}));
     await pool(qs,4,async q=>{ res.push({ok:true,tp:true,v:await (rt?TP.roundTrips({...p,...q}):TP.oneWays({...q,outFrom:r.outFrom,outTo:r.outTo,currency:T.currency,direct:!!T.direct,signal}))}); },signal);
+    // round trips glued from two one-way tickets: many more airlines (the first 3 departure airports only, to keep it quick)
+    if(rt&&!fromAny) await pool(qs.slice(0,3),1,async q=>{ res.push({ok:true,tp:true,v:await TP.mixedRoundTrips({...p,...q})}); },signal);
   }
   if(any.key!==key) return;                         // a newer search started
   // from one airport: cheapest per destination. From a country: cheapest per departure+destination pair
@@ -73,7 +75,7 @@ async function loadAnywhere(){
       if(!fromAny && origins.includes(d.dest)) return;   // skip domestic hops inside the origin set
       H.keepBest(best,(fromCountry||fromAny)?d.origin+'>'+d.dest:d.dest,d); }); });
   const s=H.parse(T.start), e=H.parse(T.end);
-  any.deals=[...best.values()].map(d=>{
+  const prep=d=>{
     // the "place" shown for each deal: the destination normally, the departure city when From = Anywhere
     const pa=fromAny?AP.byCode(d.origin):null;
     d.key=d.origin+'>'+d.dest;
@@ -81,10 +83,10 @@ async function loadAnywhere(){
     if(fromAny) d.cc=pa?pa.cc:'';
     d.tag=fromAny?(H.isCountry(T.to)?'to '+d.dest:''):(d.origin!==T.from?'from '+d.origin:'');
     d.dep=d.outDep.slice(0,10); d.ret=d.inDep?d.inDep.slice(0,10):null;
-    if(d.alt){ const a=d.alt; a.dep=a.outDep.slice(0,10); a.ret=a.inDep?a.inDep.slice(0,10):null; }
     d.nights=d.ret?H.diff(H.parse(d.dep),H.parse(d.ret)):null;
     d.fit=Math.abs(H.diff(s,H.parse(d.dep)))+(d.ret?Math.abs(H.diff(e,H.parse(d.ret))):0);
-    d.total=d.pp*pax(); return d; });
+    d.total=d.pp*pax(); return d; };
+  any.deals=[...best.values()].map(d=>{ if(d.alt) prep(d.alt); return prep(d); });
   any.origins=origins; any.loading=false;
   if(!any.deals.length&&origins.length&&failed===origins.length) any.error='Could not load fares. Check your internet connection and try again.';
   renderAnywhere();
@@ -101,7 +103,7 @@ function renderAnywhere(){
     : siteButtons(EXPLORE_SITES,{from:mainFrom,dep:T.start,ret:T.tripType==='rt'?T.end:null,adults:T.adults});
   if(any.loading){ $('#anyPicks').innerHTML=`<div class="loading" style="grid-column:1/-1">${fromAny?`Finding every city with flights to ${H.esc(H.cityOf(T.to))}…`:'Checking every destination…'}</div>`; $('#deals').innerHTML=''; $('#anySub').textContent=''; return; }
   if(any.error){ $('#anyPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">${H.esc(any.error)}</div>`; $('#deals').innerHTML=''; return; }
-  const visaOk=any.deals.filter(d=>VISA.pass(d.pCode));
+  const visaOk=shown().filter(d=>VISA.pass(d.pCode));
   renderAlChips(visaOk);
   const all=visaOk.filter(alOk);
   const hidden=any.deals.length-visaOk.length;   // the airline chips are a separate filter
@@ -126,7 +128,7 @@ function renderAnywhere(){
       <div style="margin-top:6px">${VISA.badge(d.pCode)}</div>
       <div class="price">${H.money(d.pp,d.cur)}<span class="hint"> / person</span></div>
       <div class="meta">${H.nice(H.parse(d.dep))} ${H.time(d.outDep)}${d.ret?` → ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} · ${d.nights} nights`:''}</div>
-      <div class="meta">${H.alLogo(alOf(d),true)} <span class="fn">${H.esc([d.outFlight,d.inFlight].filter(Boolean).join(' / '))}</span> ${stopTag(d)}</div>
+      <div class="meta">${alLogos(d)} <span class="fn">${H.esc([d.outFlight,d.inFlight].filter(Boolean).join(' / '))}</span> ${stopTag(d)}</div>
       ${altLine(d)}
       <div class="meta">≈ ${H.money(d.total,d.cur)} for ${pax()} traveller${pax()>1?'s':''}</div>
       <div class="actions">
@@ -138,14 +140,41 @@ function renderAnywhere(){
 }
 
 const alOf=d=>H.alOf(d);
+let noRyanair=false;                                // the "Hide Ryanair" switch, kept across searches
+const shown=()=>noRyanair?any.deals.map(d=>H.isRyanair(d)?d.alt:d).filter(Boolean):any.deals;
+/* airline logo(s): both when the way back is a different airline (two one-way tickets) */
+const alLogos=d=>H.alLogo(alOf(d),true)+(d.inAirline&&d.inAirline!==alOf(d)?' + '+H.alLogo(d.inAirline,true):'');
 const alOk=d=>!any.alSel||!any.alSel.size||any.alSel.has(alOf(d));
+/* "Airlines" multi-select next to the visa filter: All / Without Ryanair, or tick the airlines you want.
+   Shares its state with the airline chips (any.alSel, noRyanair). */
+function renderAlMs(list){
+  const host=$('#alMs'); if(!host) return;
+  if(!host.classList.contains('ms')){
+    host.classList.add('ms');
+    host.innerHTML=`<button type="button" class="ms-btn"><span class="ms-val"></span><span class="ms-car">▾</span></button>
+      <div class="ms-pop"><div class="ms-quick"><button type="button" data-p="all">All airlines</button><button type="button" data-p="nory">Without Ryanair</button></div><div class="ms-list"></div></div>`;
+    host.querySelector('.ms-btn').onclick=e=>{ e.stopPropagation(); host.classList.toggle('open'); };
+    host.querySelectorAll('[data-p]').forEach(p=>p.onclick=()=>{ noRyanair=p.dataset.p==='nory'; any.alSel=new Set(); renderAnywhere(); });
+    document.addEventListener('click',e=>{ if(!host.contains(e.target)) host.classList.remove('open'); });
+  }
+  const cnt={}; list.forEach(d=>{ const c=alOf(d); cnt[c]=(cnt[c]||0)+1; });
+  const sel=any.alSel||new Set(), codes=[...new Set([...Object.keys(cnt),...sel])].sort((a,b)=>(cnt[b]||0)-(cnt[a]||0));
+  host.querySelector('.ms-list').innerHTML=codes.length?codes.map(c=>`<label class="ms-opt"><input type="checkbox" value="${H.esc(c)}"${sel.has(c)?' checked':''}><span>${H.alLogo(c,true)} <small>${cnt[c]||0} option${cnt[c]===1?'':'s'}</small></span></label>`).join('')
+    :'<div class="empty" style="padding:8px">Search first to see the airlines.</div>';
+  host.querySelectorAll('.ms-list input').forEach(b=>b.onchange=()=>{
+    any.alSel=new Set([...host.querySelectorAll('.ms-list input')].filter(x=>x.checked).map(x=>x.value)); renderAnywhere(); });
+  host.querySelector('.ms-val').textContent=sel.size?[...sel].map(c=>AIRLINES[c]||c).join(', '):noRyanair?'Without Ryanair':'All airlines';
+}
+
 function renderAlChips(list){
+  renderAlMs(list);
   const cnt={}; list.forEach(d=>{ const c=alOf(d); cnt[c]=(cnt[c]||0)+1; });
   const codes=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
-  if(!codes.length){ $('#alChips').innerHTML=''; return; }
+  if(!codes.length&&!noRyanair){ $('#alChips').innerHTML=''; return; }
   const sel=any.alSel||new Set();
-  $('#alChips').innerHTML='<span class="al-lbl">Airlines:</span>'+`<button type="button" class="chip${sel.size?'':' on'}" data-al="">All <small>${list.length}</small></button>`+
+  $('#alChips').innerHTML='<span class="al-lbl">Airlines:</span>'+`<button type="button" class="chip${noRyanair?' on':''}" data-nory title="Show the cheapest other airline for every place">🚫 Hide Ryanair</button>`+`<button type="button" class="chip${sel.size?'':' on'}" data-al="">All <small>${list.length}</small></button>`+
     codes.map(c=>`<button type="button" class="chip${sel.has(c)?' on':''}" data-al="${c}">${H.alLogo(c,true)} <small>${cnt[c]}</small></button>`).join('');
+  $('#alChips').querySelector('[data-nory]').onclick=()=>{ noRyanair=!noRyanair; any.alSel=new Set(); renderAnywhere(); };
   $('#alChips').querySelectorAll('[data-al]').forEach(b=>b.onclick=()=>{ const c=b.dataset.al;
     if(!c) any.alSel=new Set(); else { any.alSel=any.alSel||new Set(); any.alSel.has(c)?any.alSel.delete(c):any.alSel.add(c); }
     renderAnywhere(); });
@@ -154,7 +183,8 @@ const dealBook=d=>d.src==='tp'?(d.link||FLIGHT_SITES[0].url({from:d.origin,to:d.
   :RYANAIR.bookUrl({from:d.origin,to:d.dest,dep:d.dep,ret:d.ret,adults:T.adults,children:T.children});
 const stopTag=d=>{ const n=Math.max(d.stops||0,d.rstops||0);
   return (n?`<span class="stop-tag">${n} stop${n>1?'s':''}</span>`:'<span class="stop-tag direct">direct</span>')+
-    (d.src==='tp'?'<span class="fn" title="Recent price found on Aviasales; the final price may differ"> · recent price</span>':'<span class="fn"> · live</span>'); };
+    (d.src==='tp'?'<span class="fn" title="Recent price found on Aviasales; the final price may differ"> · recent price</span>':'<span class="fn"> · live</span>')+
+    (d.mixed?'<span class="fn" title="Out and back are two separate one-way tickets: book each leg on its own"> · 2 one-way tickets</span>':''); };
 
 /* the cheapest other airline when the best fare is Ryanair: "or Pegasus €80 · 1 stop · 12 Dec → 22 Dec" */
 const altLine=d=>{ const a=d.alt; if(!a) return '';
@@ -164,13 +194,13 @@ const altLine=d=>{ const a=d.alt; if(!a) return '';
 
 function renderDealList(){
   const q=AP.norm($('#qDest').value.trim()), max=parseFloat($('#qMax').value), sort=$('#qSort').value;
-  let L=any.deals.filter(d=>VISA.pass(d.pCode)&&alOk(d)&&(!q||AP.norm(`${d.pCity} ${d.pCountry} ${d.pCode}`).includes(q))&&(isNaN(max)||d.pp<=max));
+  let L=shown().filter(d=>VISA.pass(d.pCode)&&alOk(d)&&(!q||AP.norm(`${d.pCity} ${d.pCountry} ${d.pCode}`).includes(q))&&(isNaN(max)||d.pp<=max));
   L.sort(sort==='fit'?(a,b)=>a.fit-b.fit||a.pp-b.pp:sort==='name'?(a,b)=>a.pCity.localeCompare(b.pCity):(a,b)=>a.pp-b.pp);
   if(!L.length){ $('#deals').innerHTML='<div class="empty">Nothing matches these filters.</div>'; return; }
   $('#deals').innerHTML=L.map(d=>`<div class="deal">
       <span class="fl">${H.flag(d.cc)||'✈️'}</span>
       <div><div class="t">${H.esc(d.pCity)}<small>${H.esc(d.pCountry)} · ${d.pCode}</small>${d.tag?`<span class="from-tag">${d.tag}</span>`:''} ${VISA.badge(d.pCode)}</div>
-        <div class="s">${H.alLogo(alOf(d),true)} ${stopTag(d)} 🛫 ${H.nice(H.parse(d.dep))} ${H.time(d.outDep)} <span class="fn">${H.esc(d.outFlight||'')}</span>${d.ret?` &nbsp;🛬 ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} <span class="fn">${H.esc(d.inFlight||'')}</span> · ${d.nights} nights`:' · one way'}</div>${altLine(d)}</div>
+        <div class="s">${alLogos(d)} ${stopTag(d)} 🛫 ${H.nice(H.parse(d.dep))} ${H.time(d.outDep)} <span class="fn">${H.esc(d.outFlight||'')}</span>${d.ret?` &nbsp;🛬 ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} <span class="fn">${H.esc(d.inFlight||'')}</span> · ${d.nights} nights`:' · one way'}</div>${altLine(d)}</div>
       <div class="amt">${H.money(d.pp,d.cur)}<small>per person · ≈ ${H.money(d.total,d.cur)} total</small></div>
       <div class="acts">
         <a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(dealBook(d))}">Book ↗</a>
@@ -186,7 +216,7 @@ function bindDealButtons(root){
     H.setTrip({from:org,to:code,city:H.hotelCity(code)}); selected=null; render(); window.scrollTo({top:0,behavior:'smooth'});
   });
   root.querySelectorAll('[data-hotel]').forEach(b=>b.onclick=()=>{
-    const d=any.deals.find(x=>x.key===b.dataset.hotel); if(!d) return;
+    const d=shown().find(x=>x.key===b.dataset.hotel); if(!d) return;
     const ci=String(d.outArr||d.outDep).slice(0,10), co=d.ret||H.fmt(H.add(H.parse(d.dep),Math.max(1,H.diff(H.parse(T.start),H.parse(T.end)))));
     H.setTrip({city:d.destCity,chosen:{ci,co}});
     STAYS.start({cities:[STAYS.city(d.dest,ci,co)],flightPP:d.pp,cur:d.cur,label:`${d.origin} → ${d.destCity}`});
@@ -646,6 +676,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
   f.onsubmit=e=>{e.preventDefault();submit();};
   visaMultiSelect($('#visaMs'),()=>render());
+  renderAlMs([]);                                   // the Airlines menu shows before the first search too
   f.direct.addEventListener('change',submit);
   TP.available().then(ok=>{ document.body.classList.toggle('tp-on',ok);
     $('#tpBanner').classList.toggle('hidden',ok);

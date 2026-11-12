@@ -33,7 +33,12 @@ const CACHE_MS = 10 * 60 * 1000;
 const TYPES = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8',
   '.json':'application/json', '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.webp':'image/webp', '.svg':'image/svg+xml', '.ico':'image/x-icon' };
 
-function send(res, status, body, type){ res.writeHead(status, { 'Content-Type': type || 'application/json', 'Cache-Control': 'no-store' }); res.end(body); }
+/* pages opened as a file (Origin: null) or in Streamlit on this computer (http://localhost:<port>) may read the answers */
+const corsOrigin = o => (o === 'null' || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o || '')) ? o : null;
+function send(res, status, body, type, origin){
+  const h = { 'Content-Type': type || 'application/json', 'Cache-Control': 'no-store' };
+  if (origin) { h['Access-Control-Allow-Origin'] = origin; h['Vary'] = 'Origin'; }
+  res.writeHead(status, h); res.end(body); }
 
 /* the request handlers return {status, body} so mcp/holi-mcp.js can reuse them without HTTP */
 const out = (status, obj) => ({ status, body: typeof obj === 'string' ? obj : JSON.stringify(obj) });
@@ -239,19 +244,19 @@ function openBrowser(){
   exec(cmd, () => {});
 }
 
-module.exports = { tpGet, hotelSearch, hotelFree, flightLive, serpUsage, resolveFile, TYPES };
+module.exports = { corsOrigin, tpGet, hotelSearch, hotelFree, flightLive, serpUsage, resolveFile, TYPES };
 if (require.main !== module) return;                                      // required as a library: don't start the server
 
-const reply = (res, p) => p.then(r => send(res, r.status, r.body));
+const reply = (res, p, req) => p.then(r => send(res, r.status, r.body, null, corsOrigin(req.headers.origin)));
 const server = http.createServer((req, res) => {
   let url;
   try { url = new URL(req.url, 'http://localhost'); } catch (e) { return send(res, 400, 'Bad request', 'text/plain'); }
   if (req.method !== 'GET') return send(res, 405, 'Method not allowed', 'text/plain');
-  if (url.pathname.startsWith('/tp/')) return reply(res, tpGet(url.pathname.slice(3), url.search));
-  if (url.pathname === '/hotels/search') return reply(res, hotelSearch(url.searchParams));
-  if (url.pathname === '/hotels/free') return reply(res, hotelFree(url.searchParams));
-  if (url.pathname === '/flights/live') return reply(res, flightLive(url.searchParams));
-  if (url.pathname === '/serpapi/usage') return reply(res, serpUsage());
+  if (url.pathname.startsWith('/tp/')) return reply(res, tpGet(url.pathname.slice(3), url.search), req);
+  if (url.pathname === '/hotels/search') return reply(res, hotelSearch(url.searchParams), req);
+  if (url.pathname === '/hotels/free') return reply(res, hotelFree(url.searchParams), req);
+  if (url.pathname === '/flights/live') return reply(res, flightLive(url.searchParams), req);
+  if (url.pathname === '/serpapi/usage') return reply(res, serpUsage(), req);
   serveFile(res, url);
 });
 server.on('error', e => {

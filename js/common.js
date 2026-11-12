@@ -50,7 +50,7 @@ const H = {
   /* airline of a fare: its own code when the source gives one (a fare can come without a flight number) */
   alOf(d){ return (d&&d.airline)||H.carrier(d&&d.outFlight); },
   /* Ryanair group fare (live Ryanair, or a Ryanair group airline found by Aviasales) */
-  isRyanair(d){ return d.src!=='tp'||['FR','RK','AL','RR','OE'].includes(H.alOf(d)); },
+  isRyanair(d){ const ry=['FR','RK','AL','RR','OE']; return d.src!=='tp'||ry.includes(H.alOf(d))||ry.includes(d.inAirline); },
   /* keep the cheapest fare per key in map m; when that is Ryanair, remember the cheapest other airline as .alt */
   keepBest(m,k,d){
     const cur=m.get(k), pool=[cur,cur&&cur.alt,d].filter(Boolean);
@@ -191,7 +191,10 @@ const NET = {
   check(signal){ if(signal&&signal.aborted) throw new Error('cancelled'); },
   FAILED:Symbol('failed'),   // set on a per-day result when a month could not be loaded (as opposed to: no flights)
   /* fetch + JSON body under one timer (a stalled body can hang too): {ok,status,data} */
+  /* the local server (start.bat): same address when the page comes from it, else 127.0.0.1:8080 (page opened as a file, or inside Streamlit) */
+  SERVER:/^https?:$/.test(location.protocol)?'':'http://127.0.0.1:8080',
   async json(url,opts={},ms=this.TIMEOUT){
+    if(url.startsWith('/')) url=this.SERVER+url;
     const outer=opts.signal; this.check(outer);
     const ctl=new AbortController(), stop=()=>ctl.abort();
     const t=setTimeout(stop,ms); if(outer) outer.addEventListener('abort',stop,{once:true});
@@ -545,7 +548,6 @@ const TP = {
   _ok:null,
   async available(){
     if(this._ok!==null) return this._ok;
-    if(!/^https?:$/.test(location.protocol)) return (this._ok=false);
     try{ const r=await NET.json('/tp/health',{},5000); this._ok=!!(r.data&&r.data.token); }catch(e){ this._ok=false; }
     return this._ok;
   },
@@ -601,6 +603,27 @@ const TP = {
     if(!to) (await this.everywhere({origin:from||'',one_way:'true',direct:direct?'true':'false',sorting:'price',limit:1000,currency:(currency||'EUR').toLowerCase()},outFrom,outTo,signal))
       .forEach(x=>{ if(this.inRange(x.departure_at,outFrom,outTo)) out.push(this.norm(x,currency)); });
     return out;
+  },
+  /* Round trips glued from two one-way tickets (the one-way data is much richer than the round-trip data, and
+     mixing airlines is often cheapest). outs: one-way deals from home; backs: {dest:{day:{price,dep,airline,flight,stops}}}.
+     Returns the cheapest pair per destination that fits the return window and the night limits. */
+  combine(outs,backs,{inFrom,inTo,minN,maxN}){
+    const best=new Map();
+    outs.forEach(o=>{ const dep=String(o.outDep).slice(0,10), back=backs[o.dest]||{};
+      Object.entries(back).forEach(([day,b])=>{ if(!b||!this.inRange(day,inFrom,inTo)) return;
+        const n=H.diff(H.parse(dep),H.parse(day)); if(n<(minN||1)||n>(maxN||60)) return;
+        const pp=o.pp+b.price, cur=best.get(o.dest); if(cur&&cur.pp<=pp) return;
+        best.set(o.dest,{...o,pp,inDep:b.dep||day,inFlight:b.flight||null,inAirline:b.airline||null,rstops:b.stops||0,mixed:true,link:null}); }); });
+    return [...best.values()];
+  },
+  async mixedRoundTrips({from,to,outFrom,outTo,inFrom,inTo,minN,maxN,currency,direct,signal}){
+    if(!from) return [];
+    const outs=await this.oneWays({from,to,outFrom,outTo,currency,direct,signal});
+    const cheapest=new Map(); outs.forEach(o=>{ const c=cheapest.get(o.dest); if(c==null||o.pp<c) cheapest.set(o.dest,o.pp); });
+    const dests=[...cheapest.keys()].sort((a,b)=>cheapest.get(a)-cheapest.get(b)).slice(0,40);   // cheapest 40 places only
+    const backs={}, months=this.months(inFrom,inTo);
+    await pool(dests,6,async d=>{ backs[d]=await this.perDay(d,from,months,currency,direct,signal); },signal);
+    return this.combine(outs.filter(o=>backs[o.dest]),backs,{inFrom,inTo,minN,maxN});
   },
   /* cheapest one-way per day for a route: {YYYY-MM-DD:{price,cur,dep,airline,flight,stops,link}} */
   async perDay(from,to,months,currency,direct,signal){

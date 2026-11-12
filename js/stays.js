@@ -35,7 +35,6 @@ const STAYS = {
   _svc:null,
   async available(){
     if(this._svc!==null) return this._svc;
-    if(!/^https?:$/.test(location.protocol)) return (this._svc=false);
     // two sources: Google Hotels (needs the SerpApi key) and the free one (Wikidata + Xotelo, no key)
     try{ const d=(await NET.json('/tp/health',{},5000)).data||{}; this._svc=(d.hotels||d.freeHotels)?{serp:!!d.hotels,free:!!d.freeHotels}:false; }catch(e){ this._svc=false; }
     return this._svc;
