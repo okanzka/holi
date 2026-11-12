@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heybe · How to use</title>
+<meta name="theme-color" content="#f2f5f9">
+<script>try{if(localStorage.getItem('heybe.theme')==='dark'){document.documentElement.dataset.theme='dark';document.querySelector('meta[name=theme-color]').content='#000000';}}catch(e){}</script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>">
+<style>
+  .howto{list-style:none;margin:0;padding:0;counter-reset:s}
+  .howto li{counter-increment:s;position:relative;padding:0 0 18px 52px}
+  .howto li:last-child{padding-bottom:0}
+  .howto li::before{content:counter(s);position:absolute;left:0;top:0;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;
+    font-weight:600;background:var(--b-bg);color:var(--ink)}
+  .howto b{display:block;margin-bottom:2px}
+  .howto p{margin:0;color:var(--ink-soft)}
+</style>
+</head>
+<body data-page="help">
+<nav class="nav"><div class="wrap">
+  <a class="logo" href="index.html"><span>🌴</span>heybe</a>
+  <ul><li><a class="link" data-page="home" href="index.html">Home</a></li>
+      <li><a class="link" data-page="flights" href="flights.html">✈️ Flights</a></li>
+      <li><a class="link" data-page="hotels" href="hotels.html">🏨 Hotels</a></li>
+      <li><a class="link" data-page="help" href="help.html">🧭 How to use</a></li></ul>
+</div></nav>
+
+<header class="hero small photo"><div class="wrap">
+  <span class="eyebrow">🧭 Quick guide</span>
+  <h1>How to use <em>heybe</em></h1>
+  <p class="lead">Three pages, one trip. Here's how to get from "I need a holiday" to a booked flight and hotel.</p>
+</div></header>
+
+<main class="wrap lift">
+  <section class="card">
+    <h2><span class="ico">🧳</span>1. Plan your trip on Home</h2>
+    <ol class="howto">
+      <li><b>Pick where from and where to</b><p>Type a city, airport or code. Choose <i>🌍 Anywhere</i> as the destination to see deals to every place from your airport.</p></li>
+      <li><b>Set your dates and flexibility</b><p>Pick rough dates, then ± 1–4 days. The more flexible you are, the more cheap combinations you'll see.</p></li>
+      <li><b>Add travellers and cabin, then hit “Find my flights”</b><p>Your trip is saved in the browser and shared with the Flights and Hotels pages, so you only type it once.</p></li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2><span class="ico">✈️</span>2. Find a flight</h2>
+    <ol class="howto">
+      <li><b>Check the live prices</b><p>“Top picks” and “Best deals” show live fares. “Check every airline too” adds prices from airlines the cheap-fare feed misses.</p></li>
+      <li><b>Use the fare calendar and date grid</b><p>Each square is a departure/return pair. Green is cheaper. Click a square to open that exact date pair.</p></li>
+      <li><b>Open the booking sites</b><p>One click opens 8 booking sites with your route and dates already filled in. Compare and book where it's cheapest.</p></li>
+      <li><b>Save the fares you see</b><p>Write each price into “Fares you've saved”. Heybe ranks them so you can see your best real option.</p></li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2><span class="ico">🏨</span>3. Find a hotel</h2>
+    <ol class="howto">
+      <li><b>Your destination and dates are already filled in</b><p>Change them if you want, set a budget per night and star rating, then hit “Find stays”.</p></li>
+      <li><b>Pick a stay option</b><p>Each square is a check-in/check-out pair. Fewer weekend nights usually means a lower price.</p></li>
+      <li><b>Compare 7 hotel sites and keep a shortlist</b><p>Open all sites at once, then save the hotels you like with their price and rating. Sort by cheapest, best value or highest rated.</p></li>
+    </ol>
+  </section>
+
+  <section class="card">
+    <h2><span class="ico">💡</span>Good to know</h2>
+    <div class="tips">
+      <div class="tip"><span class="e">💾</span><b>Saved on this device</b><p>Your trip, fares and shortlist stay in this browser. Nothing is sent to an account.</p></div>
+      <div class="tip"><span class="e">🔁</span><b>Prices change</b><p>Live prices are a guide. Always check the final price on the booking site before you pay.</p></div>
+      <div class="tip"><span class="e">🗓️</span><b>Mid-week is cheaper</b><p>Tuesday and Wednesday flights are often the cheapest. Try them in the date grid.</p></div>
+      <div class="tip"><span class="e">🏷️</span><b>Start over anytime</b><p>Go back to Home and change your trip. Every page updates to match.</p></div>
+    </div>
+  </section>
+
+  <div class="row end" style="margin-top:24px"><a class="btn primary" href="index.html">Plan a trip 🌴</a></div>
+</main>
+<footer><div class="s">heybe</div>Happy travels 🧭</footer>
+
+<script src="js/airports.js"></script>
+<script src="js/common.js"></script>
+</body>
+</html>
