@@ -372,6 +372,8 @@ html,body{overflow-x:clip;max-width:100%}
 .deal .t{font-weight:700;font-size:1.05rem;letter-spacing:-.018em}
 .deal .t small{font-weight:500;color:var(--muted);font-size:.8rem;margin-left:6px}
 .deal .s{font-size:.85rem;color:var(--ink-soft)}
+.alt-fare{font-size:.85rem;color:var(--ink-soft);margin-top:4px}
+.alt-fare a{color:inherit}
 .deal .amt{font:700 1.45rem/1.1 var(--font-d);letter-spacing:-.03em;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
 .deal .amt small{display:block;font:500 .75rem/1.3 var(--font-b);letter-spacing:0;color:var(--muted)}
 .deal .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:260px}

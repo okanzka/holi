@@ -49,6 +49,16 @@ const H = {
   carrier(fn){ const m=String(fn||'').match(/^([A-Z0-9]{2})\s*\d/); return m?m[1]:'FR'; },
   /* airline of a fare: its own code when the source gives one (a fare can come without a flight number) */
   alOf(d){ return (d&&d.airline)||H.carrier(d&&d.outFlight); },
+  /* Ryanair group fare (live Ryanair, or a Ryanair group airline found by Aviasales) */
+  isRyanair(d){ return d.src!=='tp'||['FR','RK','AL','RR','OE'].includes(H.alOf(d)); },
+  /* keep the cheapest fare per key in map m; when that is Ryanair, remember the cheapest other airline as .alt */
+  keepBest(m,k,d){
+    const cur=m.get(k), pool=[cur,cur&&cur.alt,d].filter(Boolean);
+    const top=pool.reduce((a,b)=>b.pp<a.pp?b:a), other=pool.filter(x=>!H.isRyanair(x)).reduce((a,b)=>!a||b.pp<a.pp?b:a,null);
+    pool.forEach(x=>{ delete x.alt; });
+    if(other&&other!==top&&H.isRyanair(top)) top.alt=other;
+    m.set(k,top);
+  },
   /* trip details passed in the page address (?from=nue&to=ist&start=…): only known places and real dates are kept */
   urlPatch(qp){
     const patch={}, place=v=>{ const c=String(v||'').toUpperCase(); return c==='ANY'||AP.byCode(c)?c:''; };

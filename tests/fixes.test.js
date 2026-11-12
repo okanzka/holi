@@ -68,3 +68,19 @@ test('"anywhere" round trips get the per-day search too; a single route does not
   await TP.roundTrips({ from: 'NUE', to: 'PMI', ...win });
   assert.equal(fetch.qs.filter(q => q.unique === 'true').length, 0);
 });
+
+test('each destination keeps the cheapest non-Ryanair fare next to a cheaper Ryanair one', () => {
+  const { H } = load('airports.js', 'common.js');
+  const best = new Map();
+  [{ dest: 'SAW', pp: 50, src: 'ryanair' },
+   { dest: 'SAW', pp: 90, src: 'tp', airline: 'W6' },
+   { dest: 'SAW', pp: 80, src: 'tp', airline: 'PC' },
+   { dest: 'SAW', pp: 70, src: 'tp', airline: 'FR' },        // Ryanair found by Aviasales is still Ryanair
+   { dest: 'BCN', pp: 60, src: 'tp', airline: 'VY' },
+   { dest: 'BCN', pp: 99, src: 'tp', airline: 'W6' }].forEach(d => H.keepBest(best, d.dest, d));
+  assert.equal(best.get('SAW').pp, 50);
+  assert.equal(best.get('SAW').alt.airline, 'PC');
+  assert.equal(best.get('BCN').airline, 'VY');
+  assert.equal(best.get('BCN').alt, undefined);                // the best is not Ryanair: nothing to add
+  assert.ok(H.isRyanair({ src: 'ryanair' }) && H.isRyanair({ src: 'tp', airline: 'RK' }) && !H.isRyanair({ src: 'tp', airline: 'W6' }));
+});

@@ -71,7 +71,7 @@ async function loadAnywhere(){
     x.v.forEach(d=>{ const a=AP.byCode(d.dest); d.cc=a?a.cc:'';
       if(toCC && d.cc!==toCC) return;
       if(!fromAny && origins.includes(d.dest)) return;   // skip domestic hops inside the origin set
-      const k=(fromCountry||fromAny)?d.origin+'>'+d.dest:d.dest, cur=best.get(k); if(!cur||d.pp<cur.pp) best.set(k,d); }); });
+      H.keepBest(best,(fromCountry||fromAny)?d.origin+'>'+d.dest:d.dest,d); }); });
   const s=H.parse(T.start), e=H.parse(T.end);
   any.deals=[...best.values()].map(d=>{
     // the "place" shown for each deal: the destination normally, the departure city when From = Anywhere
@@ -81,6 +81,7 @@ async function loadAnywhere(){
     if(fromAny) d.cc=pa?pa.cc:'';
     d.tag=fromAny?(H.isCountry(T.to)?'to '+d.dest:''):(d.origin!==T.from?'from '+d.origin:'');
     d.dep=d.outDep.slice(0,10); d.ret=d.inDep?d.inDep.slice(0,10):null;
+    if(d.alt){ const a=d.alt; a.dep=a.outDep.slice(0,10); a.ret=a.inDep?a.inDep.slice(0,10):null; }
     d.nights=d.ret?H.diff(H.parse(d.dep),H.parse(d.ret)):null;
     d.fit=Math.abs(H.diff(s,H.parse(d.dep)))+(d.ret?Math.abs(H.diff(e,H.parse(d.ret))):0);
     d.total=d.pp*pax(); return d; });
@@ -126,6 +127,7 @@ function renderAnywhere(){
       <div class="price">${H.money(d.pp,d.cur)}<span class="hint"> / person</span></div>
       <div class="meta">${H.nice(H.parse(d.dep))} ${H.time(d.outDep)}${d.ret?` → ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} · ${d.nights} nights`:''}</div>
       <div class="meta">${H.alLogo(alOf(d),true)} <span class="fn">${H.esc([d.outFlight,d.inFlight].filter(Boolean).join(' / '))}</span> ${stopTag(d)}</div>
+      ${altLine(d)}
       <div class="meta">≈ ${H.money(d.total,d.cur)} for ${pax()} traveller${pax()>1?'s':''}</div>
       <div class="actions">
         <a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(dealBook(d))}">Book${d.src==='tp'?'':' on Ryanair'} ↗</a>
@@ -154,6 +156,12 @@ const stopTag=d=>{ const n=Math.max(d.stops||0,d.rstops||0);
   return (n?`<span class="stop-tag">${n} stop${n>1?'s':''}</span>`:'<span class="stop-tag direct">direct</span>')+
     (d.src==='tp'?'<span class="fn" title="Recent price found on Aviasales; the final price may differ"> · recent price</span>':'<span class="fn"> · live</span>'); };
 
+/* the cheapest other airline when the best fare is Ryanair: "or Pegasus €80 · 1 stop · 12 Dec → 22 Dec" */
+const altLine=d=>{ const a=d.alt; if(!a) return '';
+  const n=Math.max(a.stops||0,a.rstops||0), dates=a.dep!==d.dep||a.ret!==d.ret?` · ${H.short(H.parse(a.dep))}${a.ret?' → '+H.short(H.parse(a.ret)):''}`:'';
+  return `<div class="s alt-fare">or <a target="_blank" rel="noopener" href="${H.esc(dealBook(a))}">${H.alLogo(H.alOf(a),true)} <b>${H.money(a.pp,a.cur)}</b></a>`+
+    ` · ${n?n+' stop'+(n>1?'s':''):'direct'}${dates} <span class="fn">· recent price</span></div>`; };
+
 function renderDealList(){
   const q=AP.norm($('#qDest').value.trim()), max=parseFloat($('#qMax').value), sort=$('#qSort').value;
   let L=any.deals.filter(d=>VISA.pass(d.pCode)&&alOk(d)&&(!q||AP.norm(`${d.pCity} ${d.pCountry} ${d.pCode}`).includes(q))&&(isNaN(max)||d.pp<=max));
@@ -162,7 +170,7 @@ function renderDealList(){
   $('#deals').innerHTML=L.map(d=>`<div class="deal">
       <span class="fl">${H.flag(d.cc)||'✈️'}</span>
       <div><div class="t">${H.esc(d.pCity)}<small>${H.esc(d.pCountry)} · ${d.pCode}</small>${d.tag?`<span class="from-tag">${d.tag}</span>`:''} ${VISA.badge(d.pCode)}</div>
-        <div class="s">${H.alLogo(alOf(d),true)} ${stopTag(d)} 🛫 ${H.nice(H.parse(d.dep))} ${H.time(d.outDep)} <span class="fn">${H.esc(d.outFlight||'')}</span>${d.ret?` &nbsp;🛬 ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} <span class="fn">${H.esc(d.inFlight||'')}</span> · ${d.nights} nights`:' · one way'}</div></div>
+        <div class="s">${H.alLogo(alOf(d),true)} ${stopTag(d)} 🛫 ${H.nice(H.parse(d.dep))} ${H.time(d.outDep)} <span class="fn">${H.esc(d.outFlight||'')}</span>${d.ret?` &nbsp;🛬 ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} <span class="fn">${H.esc(d.inFlight||'')}</span> · ${d.nights} nights`:' · one way'}</div>${altLine(d)}</div>
       <div class="amt">${H.money(d.pp,d.cur)}<small>per person · ≈ ${H.money(d.total,d.cur)} total</small></div>
       <div class="acts">
         <a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(dealBook(d))}">Book ↗</a>
