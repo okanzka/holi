@@ -127,3 +127,35 @@ test('the local server lets only local pages (file, Streamlit on localhost) read
   assert.equal(ok('http://localhost.evil.example'), null);
   assert.equal(ok(undefined), null);
 });
+
+test('one-route view: the airline filter picks the day\'s other-airline fare or hides the day', () => {
+  const { H } = load('airports.js', 'common.js');
+  const pc = { price: 80, airline: 'PC', src: 'tp' }, w6 = { price: 90, airline: 'W6', src: 'tp' };
+  const ry = { price: 50, airline: 'FR', src: 'ryanair', alt: pc };
+  assert.strictEqual(H.pickFare(ry, {}), ry);                                   // no filter: cheapest
+  assert.strictEqual(H.pickFare(ry, { noRyanair: true }), pc);                 // Without Ryanair: the other airline
+  assert.strictEqual(H.pickFare({ price: 50, airline: 'FR', src: 'ryanair' }, { noRyanair: true }), null);   // nothing else that day
+  assert.strictEqual(H.pickFare(ry, { sel: new Set(['PC']) }), pc);            // ticked Pegasus only
+  assert.strictEqual(H.pickFare(ry, { sel: new Set(['W6']) }), null);
+  assert.strictEqual(H.pickFare(w6, { noRyanair: true, sel: new Set(['W6']) }), w6);
+  assert.strictEqual(H.pickFare(undefined, {}), null);
+});
+
+test('Airlines menu: "All airlines" ticks every box; unticking boxes maps back to the filter', () => {
+  const { H } = load('airports.js', 'common.js');
+  const codes = ['FR', 'PC', 'W6', 'U2'];
+  const ticked = st => codes.filter(c => H.alTicked(c, st));
+  assert.deepStrictEqual(ticked({ noRyanair: false, sel: new Set() }), codes);                  // All airlines: all ticked
+  assert.deepStrictEqual(ticked({ noRyanair: true, sel: new Set() }), ['PC', 'W6', 'U2']);     // Without Ryanair
+  let st = H.alFromTicks(codes, codes);                                                          // everything ticked = All
+  assert.deepStrictEqual([st.noRyanair, st.sel.size], [false, 0]);
+  st = H.alFromTicks(codes, ['PC', 'W6', 'U2']);                                                 // Ryanair unticked = Without Ryanair
+  assert.deepStrictEqual([st.noRyanair, st.sel.size], [true, 0]);
+  st = H.alFromTicks(codes, ['PC']);                                                             // Pegasus only
+  assert.deepStrictEqual([st.noRyanair, [...st.sel]], [true, ['PC']]);
+  st = H.alFromTicks(codes, ['FR', 'PC']);
+  assert.deepStrictEqual([st.noRyanair, [...st.sel].sort()], [false, ['FR', 'PC']]);
+  st = H.alFromTicks(codes, []);                                                                 // nothing ticked: show nothing
+  assert.deepStrictEqual(ticked(st), []);
+  assert.strictEqual(H.pickFare({ price: 9, airline: 'PC', src: 'tp' }, st), null);
+});

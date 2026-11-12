@@ -104,7 +104,7 @@ function renderAnywhere(){
   if(any.loading){ $('#anyPicks').innerHTML=`<div class="loading" style="grid-column:1/-1">${fromAny?`Finding every city with flights to ${H.esc(H.cityOf(T.to))}…`:'Checking every destination…'}</div>`; $('#deals').innerHTML=''; $('#anySub').textContent=''; return; }
   if(any.error){ $('#anyPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">${H.esc(any.error)}</div>`; $('#deals').innerHTML=''; return; }
   const visaOk=shown().filter(d=>VISA.pass(d.pCode));
-  renderAlChips(visaOk);
+  renderAlChips(any.deals.flatMap(d=>[d,d.alt]).filter(d=>d&&VISA.pass(d.pCode)));   // every airline stays in the menu, also the hidden ones
   const all=visaOk.filter(alOk);
   const hidden=any.deals.length-visaOk.length;   // the airline chips are a separate filter
   const origNames=fromAny?`${any.origins.length} cities`:fromCountry?`${any.origins.length} airports in ${H.cityOf(T.from)}`:any.origins.join(', ');
@@ -141,6 +141,9 @@ function renderAnywhere(){
 
 const alOf=d=>H.alOf(d);
 let noRyanair=false;                                // the "Hide Ryanair" switch, kept across searches
+const fareOf=v=>H.pickFare(v,{noRyanair,sel:any.alSel});   // one-route view: the fare to show for a day
+/* the Airlines menu or chips changed: redraw whichever view is on screen */
+const alChanged=()=>{ if(H.isDealMode(T)) renderAnywhere(); else { renderRoute(); renderCal(); } };
 const shown=()=>noRyanair?any.deals.map(d=>H.isRyanair(d)?d.alt:d).filter(Boolean):any.deals;
 /* airline logo(s): both when the way back is a different airline (two one-way tickets) */
 const alLogos=d=>H.alLogo(alOf(d),true)+(d.inAirline&&d.inAirline!==alOf(d)?' + '+H.alLogo(d.inAirline,true):'');
@@ -154,16 +157,17 @@ function renderAlMs(list){
     host.innerHTML=`<button type="button" class="ms-btn"><span class="ms-val"></span><span class="ms-car">▾</span></button>
       <div class="ms-pop"><div class="ms-quick"><button type="button" data-p="all">All airlines</button><button type="button" data-p="nory">Without Ryanair</button></div><div class="ms-list"></div></div>`;
     host.querySelector('.ms-btn').onclick=e=>{ e.stopPropagation(); host.classList.toggle('open'); };
-    host.querySelectorAll('[data-p]').forEach(p=>p.onclick=()=>{ noRyanair=p.dataset.p==='nory'; any.alSel=new Set(); renderAnywhere(); });
+    host.querySelectorAll('[data-p]').forEach(p=>p.onclick=()=>{ noRyanair=p.dataset.p==='nory'; any.alSel=new Set(); alChanged(); });
     document.addEventListener('click',e=>{ if(!host.contains(e.target)) host.classList.remove('open'); });
   }
   const cnt={}; list.forEach(d=>{ const c=alOf(d); cnt[c]=(cnt[c]||0)+1; });
-  const sel=any.alSel||new Set(), codes=[...new Set([...Object.keys(cnt),...sel])].sort((a,b)=>(cnt[b]||0)-(cnt[a]||0));
-  host.querySelector('.ms-list').innerHTML=codes.length?codes.map(c=>`<label class="ms-opt"><input type="checkbox" value="${H.esc(c)}"${sel.has(c)?' checked':''}><span>${H.alLogo(c,true)} <small>${cnt[c]||0} option${cnt[c]===1?'':'s'}</small></span></label>`).join('')
+  const sel=any.alSel||new Set(), codes=[...new Set([...Object.keys(cnt),...[...sel].filter(c=>c!=='-')])].sort((a,b)=>(cnt[b]||0)-(cnt[a]||0));
+  host.querySelector('.ms-list').innerHTML=codes.length?codes.map(c=>`<label class="ms-opt"><input type="checkbox" value="${H.esc(c)}"${H.alTicked(c,{noRyanair,sel})?' checked':''}><span>${H.alLogo(c,true)} <small>${cnt[c]||0} option${cnt[c]===1?'':'s'}</small></span></label>`).join('')
     :'<div class="empty" style="padding:8px">Search first to see the airlines.</div>';
   host.querySelectorAll('.ms-list input').forEach(b=>b.onchange=()=>{
-    any.alSel=new Set([...host.querySelectorAll('.ms-list input')].filter(x=>x.checked).map(x=>x.value)); renderAnywhere(); });
-  host.querySelector('.ms-val').textContent=sel.size?[...sel].map(c=>AIRLINES[c]||c).join(', '):noRyanair?'Without Ryanair':'All airlines';
+    const boxes=[...host.querySelectorAll('.ms-list input')], f=H.alFromTicks(boxes.map(x=>x.value),boxes.filter(x=>x.checked).map(x=>x.value));
+    noRyanair=f.noRyanair; any.alSel=f.sel; alChanged(); });
+  host.querySelector('.ms-val').textContent=sel.has('-')?'No airline':sel.size?[...sel].map(c=>AIRLINES[c]||c).join(', '):noRyanair?'Without Ryanair':'All airlines';
 }
 
 function renderAlChips(list){
@@ -247,7 +251,7 @@ function combos(){
       const r=ret?i-flex:0, n=ret?H.diff(dep,ret):null;
       if(ret && n<Math.max(1,T.minNights||1)) return;
       const c={dep,ret,dOff:d,rOff:r,nights:n,score:score(dep,ret,d,r,wantN),ds:H.fmt(dep),rs:ret?H.fmt(ret):null};
-      const o=live.out[c.ds], b=c.rs?live.back[c.rs]:null;
+      const o=fareOf(live.out[c.ds]), b=c.rs?fareOf(live.back[c.rs]):null;
       if(o && (!c.rs || b)){ c.livePP=o.price+(b?b.price:0); c.liveCur=o.cur; c.liveTotal=c.livePP*pax();
         c.al=[...new Set([o.airline||'FR',b&&(b.airline||'FR')].filter(Boolean))]; c.ryan=o.src==='ryanair'&&(!b||b.src==='ryanair');
         c.legs=[o,b].filter(Boolean); c.srcName=c.al.map(x=>AIRLINES[x]||x).join(' + ')+(c.ryan?' (live)':''); }
@@ -263,6 +267,7 @@ function combos(){
 const shiftText=c=>{ const f=n=>n===0?'on plan':(n>0?'+':'')+n+'d'; return c.ret?`leave ${f(c.dOff)}, return ${f(c.rOff)}`:(c.dOff?`${f(c.dOff)} from plan`:'on plan'); };
 
 function renderRoute(){
+  renderAlMs([...Object.values(live.out),...Object.values(live.back)].flatMap(v=>[v,v.alt]).filter(Boolean));
   const C=combos(), hasLive=C.some(c=>c.liveTotal!=null);
   $('#liveTag').classList.toggle('hidden',!hasLive);
   // picks
@@ -482,7 +487,7 @@ function dayInfo(a,b,ds){
   if(H.parse(ds)<today()) return {state:'past'};
   if(cal.failed.has(k+m)) return {state:'err'};
   if(!cal.loaded.has(k+m)) return {state:'load'};
-  const p=(cal.data[k]||{})[ds]; return p?{state:'ok',price:p.price,cur:p.cur,dep:p.dep,arr:p.arr,airline:p.airline||'FR',stops:p.stops||0,link:p.link||null,src:p.src||'ryanair'}:{state:'none'};
+  const p=fareOf((cal.data[k]||{})[ds]); return p?{state:'ok',price:p.price,cur:p.cur,dep:p.dep,arr:p.arr,airline:p.airline||'FR',stops:p.stops||0,link:p.link||null,src:p.src||'ryanair'}:{state:'none'};
 }
 function dayBtn(a,b,ds,sel,disabled,extra=''){
   const d=H.parse(ds), info=dayInfo(a,b,ds);
@@ -581,7 +586,7 @@ function renderCal(){
     ?`<a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(RYANAIR.bookUrl(i?{from:T.to,to:T.from,dep:T.end,ret:null,adults:T.adults,children:T.children}:{from:T.from,to:T.to,dep:T.start,ret:null,adults:T.adults,children:T.children}))}">${i?'Return':'Outbound'} on Ryanair ↗</a>`
     :x.link?`<a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(x.link)}">${i?'Return':'Outbound'} ↗</a>`:'';
   $('#calSum').innerHTML=`
-    <div class="it" style="flex-direction:row;align-items:center;gap:8px">${sumAl.map(x=>H.alLogo(x)).join('')||H.alLogo('FR')}<div class="it"><small>Airline</small><b>${H.esc(sumAl.map(x=>AIRLINES[x]||x).join(' + ')||'—')}</b></div></div>
+    <div class="it" style="flex-direction:row;align-items:center;gap:8px">${sumAl.map(x=>H.alLogo(x)).join('')}<div class="it"><small>Airline</small><b>${H.esc(sumAl.map(x=>AIRLINES[x]||x).join(' + ')||'—')}</b></div></div>
     <div class="it"><small>Departure</small><b>${H.nice(H.parse(T.start))}${okO?' · '+H.time(o.dep):''}</b></div>
     ${rt?`<div class="it"><small>Return</small><b>${H.nice(H.parse(T.end))}${b&&b.state==='ok'?' · '+H.time(b.dep):''}</b></div><div class="it"><small>Stay</small><b>${nights} night${nights>1?'s':''}</b></div>`:''}
     <div class="it"><small>${pp!=null?`Per person ${priceFmt(pp,cur)}`:'Lowest price'}</small>

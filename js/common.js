@@ -50,7 +50,23 @@ const H = {
   /* airline of a fare: its own code when the source gives one (a fare can come without a flight number) */
   alOf(d){ return (d&&d.airline)||H.carrier(d&&d.outFlight); },
   /* Ryanair group fare (live Ryanair, or a Ryanair group airline found by Aviasales) */
-  isRyanair(d){ const ry=['FR','RK','AL','RR','OE']; return d.src!=='tp'||ry.includes(H.alOf(d))||ry.includes(d.inAirline); },
+  RY:['FR','RK','AL','RR','OE'],
+  isRyanair(d){ const ry=H.RY; return d.src!=='tp'||ry.includes(H.alOf(d))||ry.includes(d.inAirline); },
+  /* Airlines menu: is airline c ticked under the filter {noRyanair,sel}? ("All airlines" = every box ticked) */
+  alTicked(c,{noRyanair,sel}={}){ return sel&&sel.size?sel.has(c):!(noRyanair&&H.RY.includes(c)); },
+  /* Airlines menu: the filter for the ticked boxes. Ryanair unticked = "Without Ryanair" (its days show the other airline);
+     every other box ticked = no airline list; nothing ticked = show nothing */
+  alFromTicks(codes,ticked){
+    const t=new Set(ticked), noRyanair=codes.some(c=>H.RY.includes(c))&&!ticked.some(c=>H.RY.includes(c));
+    const need=codes.filter(c=>!(noRyanair&&H.RY.includes(c)));
+    return {noRyanair, sel:!t.size?new Set(['-']):need.every(c=>t.has(c))?new Set():t};
+  },
+  /* the fare to show for a day under the airline filter: the day's fare, or the other airline kept in .alt, or null */
+  pickFare(v,{noRyanair,sel}={}){
+    if(!v) return null;
+    const ok=x=>x&&!(noRyanair&&H.isRyanair(x))&&!(sel&&sel.size&&!sel.has(H.alOf(x)));
+    return ok(v)?v:ok(v.alt)?v.alt:null;
+  },
   /* keep the cheapest fare per key in map m; when that is Ryanair, remember the cheapest other airline as .alt */
   keepBest(m,k,d){
     const cur=m.get(k), pool=[cur,cur&&cur.alt,d].filter(Boolean);
@@ -646,7 +662,7 @@ const FARES = {
       RYANAIR.perDay(from,to,months,currency,signal).then(r=>{ Object.values(r).forEach(v=>{ v.airline='FR'; v.stops=0; v.src='ryanair'; }); return r; }),
       TP.available().then(ok=>ok?TP.perDay(from,to,months,currency,direct,signal):{}) ]);
     const out={...tp};
-    Object.entries(ry).forEach(([d,v])=>{ if(!out[d]||v.price<=out[d].price) out[d]=v; });   // live Ryanair wins ties
+    Object.entries(ry).forEach(([d,v])=>{ const t=out[d]; if(!t||v.price<=t.price){ out[d]=v; if(t&&!H.isRyanair(t)) v.alt=t; } });   // live Ryanair wins ties; the other airline stays as .alt
     if(ry[NET.FAILED]&&!Object.keys(out).length) out[NET.FAILED]=true;   // nothing at all, and Ryanair did not answer
     return out;
   },
