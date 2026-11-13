@@ -42,6 +42,7 @@ async function loadAnywhere(){
   if(any.key===key) return;
   any={key,deals:[],loading:true,error:null,origins:[]}; renderAnywhere();
   const signal=NET.begin('any');               // a newer search cancels this one
+  try{
   const fromCountry=H.isCountry(T.from), fromAny=T.from==='ANY';
   // From = Anywhere: every city with a direct flight to the destination becomes an origin
   const origins=fromAny ? await RYANAIR.sourcesTo(T.to,r.outFrom,r.inTo||r.outTo,T.currency,signal)
@@ -90,6 +91,8 @@ async function loadAnywhere(){
   any.origins=origins; any.loading=false;
   if(!any.deals.length&&origins.length&&failed===origins.length) any.error='Could not load fares. Check your internet connection and try again.';
   renderAnywhere();
+  }catch(e){ if(any.key!==key||/cancelled/.test(e&&e.message)) throw e;   // superseded: the newer search owns the screen
+    console.warn(e); any.loading=false; any.error='Could not load fares. Press Search to try again.'; renderAnywhere(); }
 }
 
 function renderAnywhere(){
@@ -236,11 +239,14 @@ async function loadLive(){
   if(live.key===key) return;
   live={key,out:{},back:{},loading:true};
   const signal=NET.begin('live');
+  try{
   const [out,back]=await Promise.all([
     FARES.perDay(T.from,T.to,monthsBetween(r.outFrom,r.outTo),T.currency,!!T.direct,signal),
     T.tripType==='rt'?FARES.perDay(T.to,T.from,monthsBetween(r.inFrom,r.inTo),T.currency,!!T.direct,signal):Promise.resolve({})]);
   if(live.key!==key) return;
   live.out=out; live.back=back; live.loading=false; renderRoute();
+  }catch(e){ if(live.key!==key||/cancelled/.test(e&&e.message)) throw e;
+    console.warn(e); live.loading=false; renderRoute(); H.toast('Could not load prices. Press Search to try again'); }
 }
 
 function combos(){
@@ -629,6 +635,8 @@ function stopOthers(keep){
   if(keep!=='live'&&live.loading){ NET.cancel('live'); live.key=''; live.loading=false; }
   if(keep!=='mc'&&mc.loading){ NET.cancel('mc'); mc.key=''; mc.loading=false; }
 }
+/* forget the last searches, so the next render asks again (cached answers still make it quick) */
+function searchAgain(){ any.key=''; live.key=''; mc.key=''; cal.failed.clear(); }
 const quiet=e=>{ if(!/cancelled/.test(e&&e.message)) console.warn(e); };   // a superseded search is not an error
 function render(){
   T=H.trip(); flex=T.flex; tripType=T.tripType;
@@ -679,7 +687,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('#swap').onclick=()=>{ const a=H.codeOf(f.from), b=H.codeOf(f.to);
     setAirport(f.from,b); setAirport(f.to,a); submit(); };
   f.start.onchange=()=>{ if(f.end.value<=f.start.value) f.end.value=H.fmt(H.add(H.parse(f.start.value),7)); };
-  function submit(){
+  /* force=true (the Search button): search again even when nothing changed, e.g. after a failed or stuck search */
+  function submit(force){
     const from=H.codeOf(f.from), to=H.codeOf(f.to);
     if(!from){ H.toast('Pick where you fly from, or choose 🌍 Anywhere'); f.from.focus(); return; }
     if(from==='ANY'&&(to==='ANY'||tripType==='mc')){ H.toast(tripType==='mc'?'Multi-city needs a home airport (e.g. NUE)':'Pick a city or country on at least one side'); f.from.focus(); return; }
@@ -698,9 +707,9 @@ document.addEventListener('DOMContentLoaded',()=>{
     }
     H.setTrip({...viaPatch,from,to:to||T.to,city:H.hotelCity(to||T.to),start:f.start.value,end:f.end.value,flex,tripType,nearby:f.nearby.checked,
       adults:+f.adults.value||1,children:+f.children.value||0,cabin:f.cabin.value,currency:f.currency.value,minNights:+f.minNights.value||0,direct:f.direct.checked});
-    selected=null; $('#detail').classList.remove('show'); render();
+    selected=null; $('#detail').classList.remove('show'); if(force===true) searchAgain(); render();
   }
-  f.onsubmit=e=>{e.preventDefault();submit();};
+  f.onsubmit=e=>{e.preventDefault();submit(true);};
   visaMultiSelect($('#visaMs'),()=>render());
   renderAlMs([]);                                   // the Airlines menu shows before the first search too
   f.direct.addEventListener('change',submit);
@@ -732,6 +741,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     if(isVia(T.tripType)&&vl===T.from){ H.toast('The last stop must be different from home'); return; }
     let ve=T.viaEnd||null;
     if(T.tripType==='open'){ ve=endCode(); if(!ve) return; if(ve===vl){ H.toast('B must be different from the last stop'); $('#viaEnd').focus(); return; } }
+    mc.key='';   // Find routes always searches again
     H.setTrip({viaMid:vm&&vm!=='ANY'?vm:null,viaLast:vl||null,viaEnd:ve,mcStops:+$('#mcStops').value||1,mcCities:+$('#mcCities').value||2,mcMin:mn,mcMax:mx,mcMust:$('#mcMust').value.trim()?H.codeOf($('#mcMust'))||null:null}); render(); };
   $('#mcStops').addEventListener('change',()=>$('#mcGo').click());
   $('#mcCities').addEventListener('change',()=>$('#mcGo').click());
