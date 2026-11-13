@@ -143,7 +143,7 @@ const alOf=d=>H.alOf(d);
 let noRyanair=false;                                // the "Hide Ryanair" switch, kept across searches
 const fareOf=v=>H.pickFare(v,{noRyanair,sel:any.alSel});   // one-route view: the fare to show for a day
 /* the Airlines menu or chips changed: redraw whichever view is on screen */
-const alChanged=()=>{ if(T.tripType==='mc'||T.tripType==='via'){ renderMulti(); loadMulti().catch(quiet); }   /* "Without Ryanair" searches again without Ryanair */ else if(H.isDealMode(T)) renderAnywhere(); else { renderRoute(); renderCal(); } };
+const alChanged=()=>{ if(T.tripType==='mc'||isVia(T.tripType)){ renderMulti(); loadMulti().catch(quiet); }   /* "Without Ryanair" searches again without Ryanair */ else if(H.isDealMode(T)) renderAnywhere(); else { renderRoute(); renderCal(); } };
 const shown=()=>noRyanair?any.deals.map(d=>H.isRyanair(d)?d.alt:d).filter(Boolean):any.deals;
 /* airline logo(s): both when the way back is a different airline (two one-way tickets) */
 const alLogos=d=>H.alLogo(alOf(d),true)+(d.inAirline&&d.inAirline!==alOf(d)?' + '+H.alLogo(d.inAirline,true):'');
@@ -392,15 +392,22 @@ function renderFares(){
    MULTI-CITY — HOME → A → B → HOME
    ===================================================================== */
 let mc={key:'',res:null,loading:false,msg:'',err:null};
+/* 'via' = A → ? → last stop → home; 'open' = the same, but the last flight goes on to another airport B */
+function isVia(t){ return t==='via'||t==='open'; }
+/* the airport typed in "Finish at (B)", or null after telling the user what is wrong */
+function endCode(){ const el=$('#viaEnd'), c=el.value.trim()?H.codeOf(el):'';
+  if(!c||c==='ANY'||H.isCountry(c)){ H.toast('Pick the airport where the trip ends (B), e.g. Istanbul'); el.focus(); return null; }
+  return c; }
 function mcParams(){
   const s=H.parse(T.start), e=H.parse(T.end);
-  const via=T.tripType==='via';
-  return {mode:via?'via':'mc',from:T.from,last:via?(T.viaLast||null):null,stops:via?(T.mcStops||1):(T.mcCities||2),outFrom:H.fmt(H.add(s,-flex)),outTo:H.fmt(H.add(s,flex)),latest:H.fmt(H.add(e,flex)),
+  const via=isVia(T.tripType);
+  return {mode:via?'via':'mc',from:T.from,last:via?(T.viaLast||null):null,end:T.tripType==='open'?(T.viaEnd||null):null,stops:via?(T.mcStops||1):(T.mcCities||2),outFrom:H.fmt(H.add(s,-flex)),outTo:H.fmt(H.add(s,flex)),latest:H.fmt(H.add(e,flex)),
     minN:T.mcMin||3,maxN:Math.max(T.mcMin||3,T.mcMax||5),currency:T.currency,noRy:noRyanair,must:via?(T.viaMid||null):(T.mcMust||null)};
 }
 async function loadMulti(){
   const p=mcParams(), key=JSON.stringify(p); if(mc.key===key) return;
   if(p.mode==='via'&&!p.last){ mc={key,res:null,loading:false,msg:'',err:'Pick your last stop before home (e.g. Mallorca) in the form above, then press Search.'}; renderMulti(); return; }
+  if(T.tripType==='open'&&!p.end){ mc={key,res:null,loading:false,msg:'',err:'Pick where the trip ends (B, e.g. Istanbul) in the form above, then press Search.'}; renderMulti(); return; }
   mc={key,res:null,loading:true,msg:'Starting…',err:null}; renderMulti();
   const signal=NET.begin('mc');
   try{ const r=await (p.mode==='via'?MULTI.viaLoop:MULTI.search)({...p,signal},m=>{ if(mc.key===key){ mc.msg=m; renderMulti(); } }); if(mc.key!==key) return; mc.res=r; mc.note=r.note||null; }
@@ -428,11 +435,11 @@ function mcSorted(){
 }
 function renderMulti(){
   const p=mcParams();
-  const via=p.mode==='via', nLegs=via?p.stops+2:p.stops+1, lastName=via?H.cityOf(p.last):'';
-  $('#mcIco').textContent=via?'🧭':'🔀';
-  $('#mcTitle').textContent=via?`${H.cityOf(p.from)} → ${p.stops===2?'? → ?':'?'} → ${lastName} → ${H.cityOf(p.from)}`:p.stops===1?'One city, one trip':`${p.stops===2?'Two':'Three'} cities, one trip`;
-  $('#mcSub').innerHTML=via?`Start in <b>${H.esc(H.cityOf(p.from))}</b>, let the fares pick ${p.stops===1?'a city':'two cities'}${p.must?` (in ${H.esc(H.cityOf(p.must))})`:''}, then spend your last nights in <b>${H.esc(lastName)}</b> and fly home to ${H.esc(H.cityOf(p.from))}. Every leg is a direct flight.`:`Fly from <b>${H.esc(H.cityOf(T.from))}</b> to ${p.stops===1?'a city, stay a few nights':`${p.stops} cities in a row, a few nights in each`}, then fly home. Every leg is a direct flight, and you always end up back home.`;
-  $('#mcWindow').textContent=`Leaving ${H.short(H.parse(p.outFrom))}–${H.short(H.parse(p.outTo))}, home by ${H.nice(H.parse(p.latest))}, ${p.minN}–${p.maxN} nights in each city${p.must?`, visiting ${H.cityOf(p.must)}`:''}. Prices per person, all ${nLegs} flights.`;
+  const via=p.mode==='via', nLegs=via?p.stops+2:p.stops+1, lastName=via?H.cityOf(p.last):'', endName=H.cityOf(p.end||p.from);
+  $('#mcIco').textContent=p.end?'🛬':via?'🧭':'🔀';
+  $('#mcTitle').textContent=via?`${H.cityOf(p.from)} → ${p.stops===2?'? → ?':'?'} → ${lastName} → ${endName}`:p.stops===1?'One city, one trip':`${p.stops===2?'Two':'Three'} cities, one trip`;
+  $('#mcSub').innerHTML=via?`Start in <b>${H.esc(H.cityOf(p.from))}</b>, let the fares pick ${p.stops===1?'a city':'two cities'}${p.must?` (in ${H.esc(H.cityOf(p.must))})`:''}, then spend your last nights in <b>${H.esc(lastName)}</b> and fly ${p.end?`on to <b>${H.esc(endName)}</b>`:`home to ${H.esc(endName)}`}. Every leg is a direct flight.`:`Fly from <b>${H.esc(H.cityOf(T.from))}</b> to ${p.stops===1?'a city, stay a few nights':`${p.stops} cities in a row, a few nights in each`}, then fly home. Every leg is a direct flight, and you always end up back home.`;
+  $('#mcWindow').textContent=`Leaving ${H.short(H.parse(p.outFrom))}–${H.short(H.parse(p.outTo))}, ${p.end?'in '+endName:'home'} by ${H.nice(H.parse(p.latest))}, ${p.minN}–${p.maxN} nights in each city${p.must?`, visiting ${H.cityOf(p.must)}`:''}. Prices per person, all ${nLegs} flights.`;
   if(mc.loading){ $('#mcPicks').innerHTML=`<div class="loading" style="grid-column:1/-1">${H.esc(mc.msg)}</div>`; $('#mcList').innerHTML=''; return; }
   if(mc.err){ $('#mcPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">${H.esc(mc.err)}</div>`; $('#mcList').innerHTML=''; return; }
   // a search without Ryanair still lists Ryanair (unticked), so it can be ticked back on
@@ -625,11 +632,11 @@ function stopOthers(keep){
 const quiet=e=>{ if(!/cancelled/.test(e&&e.message)) console.warn(e); };   // a superseded search is not an error
 function render(){
   T=H.trip(); flex=T.flex; tripType=T.tripType;
-  const isMc=T.tripType==='mc'||T.tripType==='via';
+  const isMc=T.tripType==='mc'||isVia(T.tripType);
   $('#multiMode').classList.toggle('hidden',!isMc);
   if(isMc){
     $('#anyMode').classList.add('hidden'); $('#routeMode').classList.add('hidden');
-    $('#routeTitle').innerHTML=T.tripType==='via'?`${H.esc(H.cityOf(T.from))} <em>→ ? →</em> ${H.esc(T.viaLast?H.cityOf(T.viaLast):'last stop')} <em>→</em> home`:`${H.esc(H.cityOf(T.from))} <em>→ ${T.mcCities||2} cit${(T.mcCities||2)===1?'y':'ies'} →</em> home`;
+    $('#routeTitle').innerHTML=isVia(T.tripType)?`${H.esc(H.cityOf(T.from))} <em>→ ? →</em> ${H.esc(T.viaLast?H.cityOf(T.viaLast):'last stop')} <em>→</em> ${T.tripType==='open'?H.esc(T.viaEnd?H.cityOf(T.viaEnd):'B'):'home'}`:`${H.esc(H.cityOf(T.from))} <em>→ ${T.mcCities||2} cit${(T.mcCities||2)===1?'y':'ies'} →</em> home`;
     $('#routeSub').textContent=`${H.nice(H.parse(T.start))} – ${H.nice(H.parse(T.end))} · ±${T.flex} days · ${T.adults} adult${T.adults>1?'s':''}${T.children?' + '+T.children+' child':''}`;
     stopOthers('mc'); renderMulti(); loadMulti().catch(quiet); return;
   }
@@ -647,7 +654,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   Object.assign(patch,H.urlPatch(qp));
   if(patch.to) patch.city=H.hotelCity(patch.to);
   if(/^(week|month)$/.test(qp.get('cal')||'')) cal.view=qp.get('cal');
-  if(/^(rt|ow|mc|via)$/.test(qp.get('trip')||'')) patch.tripType=qp.get('trip');
+  if(/^(rt|ow|mc|via|open)$/.test(qp.get('trip')||'')) patch.tripType=qp.get('trip');
+  { const fin=String(qp.get('finish')||'').toUpperCase(); if(AP.byCode(fin)) patch.viaEnd=fin; }   // ?trip=open&finish=IST
   if(qp.get('visa')) patch.visaSel=qp.get('visa').split(',').filter(k=>VISA.ALL.includes(k));
   if(Object.keys(patch).length) H.setTrip(patch);
   const f=$('#f'); T=H.trip(); flex=T.flex; tripType=T.tripType;
@@ -658,10 +666,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   const paint=()=>{ pills.forEach(b=>b.classList.toggle('on',+b.dataset.v===flex)); segs.forEach(b=>b.classList.toggle('on',b.dataset.v===tripType));
     $('#endWrap').style.display=tripType==='ow'?'none':'';
     // multi-city starts and ends at home, so "To" and the swap button don't apply
-    const mcOn=tripType==='mc', viaOn=tripType==='via';
+    const mcOn=tripType==='mc', viaOn=isVia(tripType), openOn=tripType==='open';
     // multi-city and the via route start and end at home: the route row below replaces "To"
     f.to.closest('label').style.display=(mcOn||viaOn)?'none':''; $('#swap').style.display=(mcOn||viaOn)?'none':'';
-    document.querySelectorAll('.via-only').forEach(el=>el.style.display=viaOn?'':'none'); $('#mcMustLbl').parentNode.style.display=viaOn?'none':'';
+    document.querySelectorAll('.via-only').forEach(el=>el.style.display=viaOn?'':'none'); document.querySelectorAll('.open-only').forEach(el=>el.style.display=openOn?'':'none');
+    $('#viaLastLbl').textContent=openOn?'Last stop':'Last stop, then home'; $('#mcMustLbl').parentNode.style.display=viaOn?'none':'';
     f.nearby.closest('label').style.visibility=(mcOn||viaOn)?'hidden':'';
     $('#mcStopsWrap').style.display=viaOn?'':'none'; $('#mcCitiesWrap').style.display=viaOn?'none':''; };
   pills.forEach(b=>b.onclick=()=>{flex=+b.dataset.v;paint();submit();});
@@ -674,17 +683,18 @@ document.addEventListener('DOMContentLoaded',()=>{
     const from=H.codeOf(f.from), to=H.codeOf(f.to);
     if(!from){ H.toast('Pick where you fly from, or choose 🌍 Anywhere'); f.from.focus(); return; }
     if(from==='ANY'&&(to==='ANY'||tripType==='mc')){ H.toast(tripType==='mc'?'Multi-city needs a home airport (e.g. NUE)':'Pick a city or country on at least one side'); f.from.focus(); return; }
-    if(tripType==='via'&&(from==='ANY'||H.isCountry(from))){ H.toast('Pick your home airport in From (e.g. NUE)'); f.from.focus(); return; }
+    if(isVia(tripType)&&(from==='ANY'||H.isCountry(from))){ H.toast('Pick your home airport in From (e.g. NUE)'); f.from.focus(); return; }
     if(tripType==='mc'&&H.isCountry(from)){ H.toast('Multi-city needs a home airport (e.g. NUE), not a whole country'); f.from.focus(); return; }
     if(!to&&tripType!=='mc'){ H.toast('Pick a destination, or choose 🌍 Anywhere'); f.to.focus(); return; }
     if(!f.start.value||f.start.value<H.fmt(new Date())){ H.toast('Pick a departure date from today on'); f.start.focus(); return; }
     if(tripType!=='ow'&&f.end.value<=f.start.value){ H.toast('Return must be after departure'); return; }
     let viaPatch={};
-    if(tripType==='via'){
+    if(isVia(tripType)){
       const vm=$('#viaMid').value.trim()?H.codeOf($('#viaMid')):'ANY', vl=$('#viaLast').value.trim()?H.codeOf($('#viaLast')):'';
       if(!vl||vl==='ANY'){ H.toast('Pick your last stop before home, e.g. Mallorca'); $('#viaLast').focus(); return; }
       if(vl===from){ H.toast('The last stop must be different from home'); $('#viaLast').focus(); return; }
       viaPatch={viaMid:vm&&vm!=='ANY'?vm:null,viaLast:vl};
+      if(tripType==='open'){ const ve=endCode(); if(!ve) return; if(ve===vl){ H.toast('B must be different from the last stop'); $('#viaEnd').focus(); return; } viaPatch.viaEnd=ve; }
     }
     H.setTrip({...viaPatch,from,to:to||T.to,city:H.hotelCity(to||T.to),start:f.start.value,end:f.end.value,flex,tripType,nearby:f.nearby.checked,
       adults:+f.adults.value||1,children:+f.children.value||0,cabin:f.cabin.value,currency:f.currency.value,minNights:+f.minNights.value||0,direct:f.direct.checked});
@@ -712,17 +722,20 @@ document.addEventListener('DOMContentLoaded',()=>{
     cal.outMonth=T.start.slice(0,7); cal.backMonth=T.end.slice(0,7); renderCal(); });
   // multi-city controls
   setAirport($('#viaMid'),T.viaMid||'ANY');
+  if(T.viaEnd) setAirport($('#viaEnd'),T.viaEnd);
   if(!T.viaLast&&T.to&&T.to!=='ANY'&&T.to!==T.from) H.setTrip({viaLast:T.to}); if(H.trip().viaLast) setAirport($('#viaLast'),H.trip().viaLast);
   $('#mcStops').value=T.mcStops||1; $('#mcCities').value=T.mcCities||2; $('#mcMin').value=T.mcMin||3; $('#mcMax').value=T.mcMax||5; if(T.mcMust) setAirport($('#mcMust'),T.mcMust);
   $('#mcGo').onclick=()=>{ const mn=Math.max(1,+$('#mcMin').value||3), mx=Math.max(mn,+$('#mcMax').value||mn);
     $('#mcMin').value=mn; $('#mcMax').value=mx;
     const vm=$('#viaMid').value.trim()?H.codeOf($('#viaMid')):'ANY', vl=$('#viaLast').value.trim()?H.codeOf($('#viaLast')):'';
-    if(T.tripType==='via'&&(!vl||vl==='ANY')){ H.toast('Pick your last stop, e.g. Mallorca'); $('#viaLast').focus(); return; }
-    if(T.tripType==='via'&&vl===T.from){ H.toast('The last stop must be different from home'); return; }
-    H.setTrip({viaMid:vm&&vm!=='ANY'?vm:null,viaLast:vl||null,mcStops:+$('#mcStops').value||1,mcCities:+$('#mcCities').value||2,mcMin:mn,mcMax:mx,mcMust:$('#mcMust').value.trim()?H.codeOf($('#mcMust'))||null:null}); render(); };
+    if(isVia(T.tripType)&&(!vl||vl==='ANY')){ H.toast('Pick your last stop, e.g. Mallorca'); $('#viaLast').focus(); return; }
+    if(isVia(T.tripType)&&vl===T.from){ H.toast('The last stop must be different from home'); return; }
+    let ve=T.viaEnd||null;
+    if(T.tripType==='open'){ ve=endCode(); if(!ve) return; if(ve===vl){ H.toast('B must be different from the last stop'); $('#viaEnd').focus(); return; } }
+    H.setTrip({viaMid:vm&&vm!=='ANY'?vm:null,viaLast:vl||null,viaEnd:ve,mcStops:+$('#mcStops').value||1,mcCities:+$('#mcCities').value||2,mcMin:mn,mcMax:mx,mcMust:$('#mcMust').value.trim()?H.codeOf($('#mcMust'))||null:null}); render(); };
   $('#mcStops').addEventListener('change',()=>$('#mcGo').click());
   $('#mcCities').addEventListener('change',()=>$('#mcGo').click());
-  ['#viaMid','#viaLast'].forEach(s=>$(s).addEventListener('change',()=>{ if(tripType==='via'&&$('#viaLast').value.trim()) submit(); }));
+  ['#viaMid','#viaLast','#viaEnd'].forEach(s=>$(s).addEventListener('change',()=>{ if(isVia(tripType)&&$('#viaLast').value.trim()&&(tripType!=='open'||$('#viaEnd').value.trim())) submit(); }));
   $('#mcSort').addEventListener('change',()=>{ if(!mc.loading&&mc.res) renderMcList(); });
   ['#mcQ','#mcMaxP'].forEach(s=>$(s).addEventListener('input',()=>{ if(!mc.loading&&mc.res) renderMcList(); }));
   ['#qDest','#qMax','#qSort'].forEach(s=>$(s).addEventListener('input',()=>{ if(!any.loading) renderDealList(); }));

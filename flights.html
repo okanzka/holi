@@ -29,14 +29,15 @@
   <section class="card">
     <div class="row" style="margin-bottom:16px">
       <h2 style="margin:0"><span class="ico">🧭</span>Your trip</h2><span class="spacer"></span>
-      <div class="seg" id="tripType"><button type="button" data-v="rt">Round trip</button><button type="button" data-v="ow">One way</button><button type="button" data-v="mc">🔀 Multi-city</button><button type="button" data-v="via">🧭 ? → Last stop → Home</button></div>
+      <div class="seg" id="tripType"><button type="button" data-v="rt">Round trip</button><button type="button" data-v="ow">One way</button><button type="button" data-v="mc">🔀 Multi-city</button><button type="button" data-v="via">🧭 ? → Last stop → Home</button><button type="button" data-v="open">🛬 ? → Last stop → B</button></div>
     </div>
     <form id="f" class="grid g-search">
       <label class="f span-3">From<input name="from" data-ac data-anywhere required placeholder="City, airport, code or Anywhere"></label>
       <button type="button" class="swap" id="swap" title="Swap" style="grid-column:span 1">⇄</button>
       <label class="f span-3">To<input name="to" data-ac data-anywhere required placeholder="Anywhere, or a city"></label>
       <label class="f span-2 via-only">Via<input id="viaMid" data-ac data-anywhere placeholder="🌍 Anywhere"></label>
-      <label class="f span-2 via-only">Last stop, then home<input id="viaLast" data-ac placeholder="e.g. Mallorca"></label>
+      <label class="f span-2 via-only"><span id="viaLastLbl">Last stop, then home</span><input id="viaLast" data-ac placeholder="e.g. Mallorca"></label>
+      <label class="f span-2 open-only">Finish at (B)<input id="viaEnd" data-ac placeholder="e.g. Istanbul"></label>
       <label class="f span-2">Leave around<input type="date" name="start" required></label>
       <label class="f span-3" id="endWrap">Come back around<input type="date" name="end"></label>
       <label class="f span-6">Flexibility (days before &amp; after)

@@ -573,9 +573,10 @@ const MULTI = {
   },
 };
 
-/* HOME → ? [→ ?] → LAST STOP → HOME. The user picks the last stop (airport or "C:XX" country);
+/* HOME → ? [→ ?] → LAST STOP → HOME (or → o.end, a different airport B). The user picks the last stop (airport or "C:XX" country);
    the city/cities before it are found from live fares. Every leg is a direct flight (any airline). */
 MULTI.viaLoop = async function(o,progress=()=>{}){
+  const end=o.end||o.from;                                              // where the last flight lands
   const minN=Math.max(1,o.minN||3), maxN=Math.max(minN,o.maxN||5), k=o.stops===2?2:1;
   const t=new Date(); t.setHours(0,0,0,0);
   const outFrom=H.parse(o.outFrom)<t?H.fmt(t):o.outFrom;
@@ -590,35 +591,35 @@ MULTI.viaLoop = async function(o,progress=()=>{}){
 
   progress(`Finding every city you can fly to from ${o.from}…`);
   const [homeNet,leg1]=await Promise.all([
-    MLEGS.oneWays({from:o.from,outFrom,outTo:o.latest,currency:o.currency,signal:o.signal,noRy:o.noRy},true),
+    MLEGS.oneWays({from:end,outFrom,outTo:o.latest,currency:o.currency,signal:o.signal,noRy:o.noRy},true),
     MLEGS.oneWays({from:o.from,outFrom,outTo:o.outTo,currency:o.currency,signal:o.signal,noRy:o.noRy})]);
-  // last-stop airports: must have a direct flight back home
+  // last-stop airports: must have a direct flight to the end (routes from it, read the other way)
   const homeSet=new Set(homeNet.map(d=>d.dest));
-  const homeBack={}; // last stop → home, per day
-  if(!H.isCountry(o.last)){ progress(`Checking flights from ${H.cityOf(o.last)} home to ${H.cityOf(o.from)}…`);
-    homeBack[o.last]=await MLEGS.perDay(o.last,o.from,months,o.currency,o.signal,o.noRy); }
+  const homeBack={}; // last stop → end, per day
+  if(!H.isCountry(o.last)){ progress(`Checking flights from ${H.cityOf(o.last)} to ${H.cityOf(end)}…`);
+    homeBack[o.last]=await MLEGS.perDay(o.last,end,months,o.currency,o.signal,o.noRy); }
   const ends=H.isCountry(o.last)?[...homeSet].filter(c=>ccOf(c)===o.last.slice(2)):(Object.keys(homeBack[o.last]).length?[o.last]:[]);
-  if(!ends.length) return {itineraries:[],checked:{},note:`No direct flight from ${H.cityOf(o.last)} back to ${H.cityOf(o.from)} in these dates.`};
+  if(!ends.length) return {itineraries:[],checked:{},note:`No direct flight from ${H.cityOf(o.last)} ${end===o.from?'back ':''}to ${H.cityOf(end)} in these dates.`};
   const endSet=new Set(ends);
-  const As=leg1.filter(a=>!endSet.has(a.dest)&&(k===2||!o.must||match(a.dest)));
+  const As=leg1.filter(a=>!endSet.has(a.dest)&&a.dest!==end&&(k===2||!o.must||match(a.dest)));
   const res=[];
 
   if(k===1){
     progress(`Checking flights from ${As.length} cities to ${H.cityOf(o.last)}…`);
     const hops=await pool(As,6,async a=>{ const w=win(H.parse(a.outDep.slice(0,10))); if(!w) return {a,opts:[]};
       const r=await MLEGS.oneWays({from:a.dest,outFrom:w[0],outTo:w[1],currency:o.currency,signal:o.signal,noRy:o.noRy},true); return {a,opts:r.filter(x=>endSet.has(x.dest))}; },o.signal);
-    progress(`Checking flights home to ${o.from}…`);
-    await pool(ends.filter(e=>!homeBack[e]),6,async e=>{ homeBack[e]=await MLEGS.perDay(e,o.from,months,o.currency,o.signal,o.noRy); },o.signal);
+    progress(`Checking flights to ${H.cityOf(end)}…`);
+    await pool(ends.filter(e=>!homeBack[e]),6,async e=>{ homeBack[e]=await MLEGS.perDay(e,end,months,o.currency,o.signal,o.noRy); },o.signal);
     hops.forEach(({a,opts})=>opts.forEach(x=>{
       const d2=H.parse(x.outDep.slice(0,10)), h=H.homeFare(homeBack[x.dest]||{},d2,minN,maxN,o.latest); if(!h) return;
-      res.push({legs:[leg(a),leg(x),legP(x.dest,o.from,h)],stops:[a.destCity,x.destCity],
+      res.push({legs:[leg(a),leg(x),legP(x.dest,end,h)],stops:[a.destCity,x.destCity],
         nights:[H.diff(H.parse(a.outDep.slice(0,10)),d2),H.diff(d2,H.parse(h.day))],total:a.pp+x.pp+h.price,cur:a.cur,start:a.outDep.slice(0,10),end:h.day});
     }));
   } else {
     progress(`Checking onward flights from ${As.length} cities…`);
     const hops=await pool(As,6,async a=>{ const w=win(H.parse(a.outDep.slice(0,10))); if(!w) return {a,opts:[]};
       const r=await MLEGS.oneWays({from:a.dest,outFrom:w[0],outTo:w[1],currency:o.currency,signal:o.signal,noRy:o.noRy},true);
-      return {a,opts:r.filter(b=>b.dest!==o.from&&b.dest!==a.dest&&!endSet.has(b.dest)&&(!o.must||match(a.dest)||match(b.dest)))}; },o.signal);
+      return {a,opts:r.filter(b=>b.dest!==o.from&&b.dest!==end&&b.dest!==a.dest&&!endSet.has(b.dest)&&(!o.must||match(a.dest)||match(b.dest)))}; },o.signal);
     const Bs=[...new Set(hops.flatMap(h=>h.opts.map(b=>b.dest)))];
     progress(`Checking which of ${Bs.length} cities fly to ${H.cityOf(o.last)}…`);
     // which last-stop airports each B reaches (one request per B), then daily prices for those pairs
@@ -626,13 +627,13 @@ MULTI.viaLoop = async function(o,progress=()=>{}){
     const pairs=Bs.flatMap(b=>(reach[b]||[]).map(e=>[b,e])).slice(0,90);
     progress(`Reading daily prices for ${pairs.length} connections…`);
     const pd={}; await pool(pairs,6,async([b,e])=>{ pd[b+'>'+e]=await MLEGS.perDay(b,e,months,o.currency,o.signal,o.noRy); },o.signal);
-    await pool(ends.filter(e=>!homeBack[e]),6,async e=>{ homeBack[e]=await MLEGS.perDay(e,o.from,months,o.currency,o.signal,o.noRy); },o.signal);
+    await pool(ends.filter(e=>!homeBack[e]),6,async e=>{ homeBack[e]=await MLEGS.perDay(e,end,months,o.currency,o.signal,o.noRy); },o.signal);
     hops.forEach(({a,opts})=>opts.forEach(b=>{
       const d2=H.parse(b.outDep.slice(0,10));
       (reach[b.dest]||[]).forEach(e=>{
         const x=pick(pd[b.dest+'>'+e]||{},d2,o.latest); if(!x) return;
         const d3=H.parse(x.day), h=H.homeFare(homeBack[e]||{},d3,minN,maxN,o.latest); if(!h) return;
-        res.push({legs:[leg(a),leg(b),legP(b.dest,e,x),legP(e,o.from,h)],stops:[a.destCity,b.destCity,H.cityOf(e)],
+        res.push({legs:[leg(a),leg(b),legP(b.dest,e,x),legP(e,end,h)],stops:[a.destCity,b.destCity,H.cityOf(e)],
           nights:[H.diff(H.parse(a.outDep.slice(0,10)),d2),H.diff(d2,d3),H.diff(d3,H.parse(h.day))],
           total:a.pp+b.pp+x.price+h.price,cur:a.cur,start:a.outDep.slice(0,10),end:h.day});
       });
