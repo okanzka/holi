@@ -159,3 +159,125 @@ test('Airlines menu: "All airlines" ticks every box; unticking boxes maps back t
   assert.deepStrictEqual(ticked(st), []);
   assert.strictEqual(H.pickFare({ price: 9, airline: 'PC', src: 'tp' }, st), null);
 });
+
+// fake network: Ryanair has nothing, Travelpayouts has Pegasus NUE → IST → NUE (direct)
+function tpOnlyFetch(){
+  const ok = data => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data) });
+  const f = url => { f.urls.push(url); const u = new URL(url), q = u.searchParams;
+    if (url.includes('ryanair')) return ok(url.includes('cheapestPerDay') ? { outbound: { fares: [] } } : { fares: [] });
+    if (u.pathname === '/tp/health') return ok({ token: true });
+    if (u.pathname.endsWith('/prices_for_dates') && q.get('origin') === 'NUE' && !q.get('departure_at').slice(8))
+      return ok({ success: true, data: [{ origin: 'NUE', destination: 'IST', departure_at: '2027-01-02T10:00:00+01:00', price: 50, airline: 'PC', flight_number: '1', transfers: 0 }] });
+    if (u.pathname.endsWith('/grouped_prices') && q.get('origin') === 'IST' && q.get('destination') === 'NUE')
+      return ok({ success: true, data: { '2027-01-06': { price: 70, airline: 'PC', flight_number: '2', departure_at: '2027-01-06T08:00:00+03:00', transfers: 0 } } });
+    return ok({ success: true, data: [] }); };
+  f.urls = []; return f;
+}
+
+test('multi-city: other airlines (Travelpayouts) fill the legs, not only Ryanair', async () => {
+  const fetch = tpOnlyFetch();
+  const { MULTI } = load('airports.js', 'common.js', { fetch, URL });
+  const r = await MULTI.search({ from: 'NUE', stops: 1, outFrom: '2027-01-01', outTo: '2027-01-03', latest: '2027-01-10', minN: 3, maxN: 5, currency: 'EUR' });
+  assert.strictEqual(r.itineraries.length, 1);
+  const it = r.itineraries[0];
+  assert.deepStrictEqual(Array.from(it.legs, l => l.airline), ['PC', 'PC']);
+  assert.strictEqual(it.total, 120);
+  assert.ok(fetch.urls.every(u => !u.includes('prices_for_dates') || !/departure_at=\d{4}-\d\d-\d\d(&|$)/.test(u) || /origin=NUE/.test(u)), 'no per-day "everywhere" calls from every stop');
+});
+
+test('multi-city: the airline filter swaps a Ryanair leg for the same-day other airline, or drops the trip', () => {
+  const { H } = load('airports.js', 'common.js');
+  const pc = { price: 80, airline: 'PC', src: 'tp' };
+  const it = { total: 90, legs: [{ price: 40, airline: 'PC', src: 'tp', dep: '2027-01-02' }, { price: 50, airline: 'FR', src: 'ryanair', dep: '2027-01-05', alt: { ...pc, dep: '2027-01-05' } }] };
+  assert.strictEqual(H.filterTrip(it, {}), it);                                       // no filter: unchanged
+  const nr = H.filterTrip(it, { noRyanair: true });
+  assert.deepStrictEqual([nr.total, nr.legs[1].airline], [120, 'PC']);
+  assert.strictEqual(H.filterTrip({ total: 9, legs: [{ price: 9, airline: 'FR', src: 'ryanair' }] }, { noRyanair: true }), null);
+});
+
+test('multi-city: 3 cities in a row (NUE → IST → ATH → FCO → NUE)', async () => {
+  const ok = data => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data) });
+  const row = (o, d, day, price) => ({ origin: o, destination: d, departure_at: `2027-01-${day}T10:00:00+01:00`, price, airline: 'PC', flight_number: '1', transfers: 0 });
+  const rows = { NUE: [row('NUE', 'IST', '02', 50), row('NUE', 'FCO', '02', 999)], IST: [row('IST', 'ATH', '05', 30)], ATH: [row('ATH', 'FCO', '08', 40)] };
+  const fetch = url => { const u = new URL(url), q = u.searchParams;
+    if (url.includes('ryanair')) return ok(url.includes('cheapestPerDay') ? { outbound: { fares: [] } } : { fares: [] });
+    if (u.pathname === '/tp/health') return ok({ token: true });
+    if (u.pathname.endsWith('/prices_for_dates') && !q.get('departure_at').slice(8)) return ok({ success: true, data: rows[q.get('origin')] || [] });
+    if (u.pathname.endsWith('/grouped_prices') && q.get('origin') === 'FCO' && q.get('destination') === 'NUE')
+      return ok({ success: true, data: { '2027-01-11': { price: 60, airline: 'PC', flight_number: '2', departure_at: '2027-01-11T08:00:00+01:00', transfers: 0 } } });
+    return ok({ success: true, data: [] }); };
+  const { MULTI } = load('airports.js', 'common.js', { fetch, URL });
+  const r = await MULTI.search({ from: 'NUE', stops: 3, outFrom: '2027-01-01', outTo: '2027-01-03', latest: '2027-01-14', minN: 3, maxN: 5, currency: 'EUR' });
+  assert.strictEqual(r.itineraries.length, 1);
+  const it = r.itineraries[0];
+  assert.deepStrictEqual(Array.from(it.legs, l => l.to), ['IST', 'ATH', 'FCO', 'NUE']);
+  assert.deepStrictEqual(Array.from(it.nights), [3, 3, 3]);
+  assert.strictEqual(it.total, 180);
+});
+
+test('multi-city: a cheaper Ryanair fare does not throw away another airline on a different day', () => {
+  const { H, MLEGS } = load('airports.js', 'common.js');
+  const fr = { dest: 'BCN', pp: 20, outDep: '2027-01-02T08:00', src: 'ryanair', airline: 'FR' };
+  const u2 = { dest: 'BCN', pp: 60, outDep: '2027-01-04T08:00', src: 'tp', airline: 'U2' };
+  const r = MLEGS.merge([fr], [u2]);
+  assert.deepStrictEqual(Array.from(r, x => x.airline).sort(), ['FR', 'U2']);
+  const sameDay = MLEGS.merge([fr], [{ ...u2, outDep: '2027-01-02T12:00' }]);
+  assert.strictEqual(sameDay.length, 1);
+  assert.strictEqual(sameDay[0].alt.airline, 'U2');
+});
+
+test('via: a last stop named by the user is checked directly, not only through the list of places from home', async () => {
+  const ok = data => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data) });
+  const row = (o, d, day, price) => ({ origin: o, destination: d, departure_at: `2027-01-${day}T10:00:00+01:00`, price, airline: 'PC', flight_number: '1', transfers: 0 });
+  const rows = { NUE: [row('NUE', 'IST', '02', 50)], IST: [row('IST', 'FCO', '05', 30)] };
+  const fetch = url => { const u = new URL(url), q = u.searchParams;
+    if (url.includes('ryanair')) return ok(url.includes('cheapestPerDay') ? { outbound: { fares: [] } } : { fares: [] });
+    if (u.pathname === '/tp/health') return ok({ token: true });
+    if (u.pathname.endsWith('/prices_for_dates') && !q.get('departure_at').slice(8)) return ok({ success: true, data: rows[q.get('origin')] || [] });
+    if (u.pathname.endsWith('/grouped_prices') && q.get('origin') === 'FCO' && q.get('destination') === 'NUE')
+      return ok({ success: true, data: { '2027-01-09': { price: 60, airline: 'U2', flight_number: '2', departure_at: '2027-01-09T08:00:00+01:00', transfers: 0 } } });
+    return ok({ success: true, data: [] }); };
+  const { MULTI } = load('airports.js', 'common.js', { fetch, URL });
+  const r = await MULTI.viaLoop({ from: 'NUE', last: 'FCO', stops: 1, outFrom: '2027-01-01', outTo: '2027-01-03', latest: '2027-01-14', minN: 3, maxN: 5, currency: 'EUR' });
+  assert.strictEqual(r.itineraries.length, 1);
+  assert.deepStrictEqual(Array.from(r.itineraries[0].legs, l => l.to), ['IST', 'FCO', 'NUE']);
+});
+
+test('multi-city: the flight home keeps the cheapest other airline in the whole window, and the filter moves the dates', () => {
+  const { H } = load('airports.js', 'common.js');
+  const prices = { '2027-01-05': { price: 20, src: 'ryanair', airline: 'FR', dep: '2027-01-05T09:00' },
+                   '2027-01-06': { price: 70, src: 'tp', airline: 'U2', dep: '2027-01-06T09:00' } };
+  const h = H.homeFare(prices, H.parse('2027-01-02'), 3, 5, '2027-01-14');
+  assert.deepStrictEqual([h.day, h.airline, h.alt.airline, h.alt.day], ['2027-01-05', 'FR', 'U2', '2027-01-06']);
+  const it = { total: 70, start: '2027-01-02', end: '2027-01-05', nights: [3],
+    legs: [{ price: 50, airline: 'PC', src: 'tp', dep: '2027-01-02T10:00' }, { price: 20, airline: 'FR', src: 'ryanair', dep: '2027-01-05T09:00', alt: { price: 70, airline: 'U2', src: 'tp', dep: '2027-01-06T09:00' } }] };
+  const f = H.filterTrip(it, { noRyanair: true });
+  assert.deepStrictEqual([f.total, f.end, Array.from(f.nights)], [120, '2027-01-06', [4]]);
+});
+
+test('multi-city "Without Ryanair" searches without Ryanair from the start (no Ryanair requests, no Ryanair legs)', async () => {
+  const ok = data => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(data) });
+  const urls = [];
+  const fetch = url => { urls.push(url); const u = new URL(url), q = u.searchParams;
+    if (url.includes('ryanair')) return ok({ fares: [] });
+    if (u.pathname === '/tp/health') return ok({ token: true });
+    if (u.pathname.endsWith('/prices_for_dates')) return ok({ success: true, data: [
+      { origin: q.get('origin'), destination: 'BCN', departure_at: '2027-01-02T10:00:00+01:00', price: 10, airline: 'FR', flight_number: '1', transfers: 0 },
+      { origin: q.get('origin'), destination: 'BCN', departure_at: '2027-01-03T10:00:00+01:00', price: 40, airline: 'U2', flight_number: '2', transfers: 0 }] });
+    if (u.pathname.endsWith('/grouped_prices')) return ok({ success: true, data: {
+      '2027-01-06': { price: 5, airline: 'FR', flight_number: '3', departure_at: '2027-01-06T08:00:00+01:00', transfers: 0 },
+      '2027-01-07': { price: 50, airline: 'VY', flight_number: '4', departure_at: '2027-01-07T08:00:00+01:00', transfers: 0 } } });
+    return ok({ success: true, data: [] }); };
+  const { MLEGS } = load('airports.js', 'common.js', { fetch, URL });
+  const ow = await MLEGS.oneWays({ from: 'NUE', outFrom: '2027-01-01', outTo: '2027-01-03', currency: 'EUR', noRy: true }, true);
+  assert.deepStrictEqual(Array.from(ow, x => x.airline), ['U2']);
+  const pd = await MLEGS.perDay('BCN', 'NUE', ['2027-01-01'], 'EUR', undefined, true);
+  assert.deepStrictEqual(Object.keys(pd), ['2027-01-07']);
+  assert.ok(!urls.some(u => u.includes('ryanair')), 'no Ryanair requests');
+});
+
+test('every page script parses (a broken flights.js would leave the page dead)', () => {
+  const fs = require('fs'), vm = require('vm');
+  for (const f of fs.readdirSync(path.join(__dirname, '..', 'js')).filter(f => f.endsWith('.js')))
+    assert.doesNotThrow(() => new vm.Script(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), { filename: f }), f);
+});

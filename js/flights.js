@@ -143,7 +143,7 @@ const alOf=d=>H.alOf(d);
 let noRyanair=false;                                // the "Hide Ryanair" switch, kept across searches
 const fareOf=v=>H.pickFare(v,{noRyanair,sel:any.alSel});   // one-route view: the fare to show for a day
 /* the Airlines menu or chips changed: redraw whichever view is on screen */
-const alChanged=()=>{ if(H.isDealMode(T)) renderAnywhere(); else { renderRoute(); renderCal(); } };
+const alChanged=()=>{ if(T.tripType==='mc'||T.tripType==='via'){ renderMulti(); loadMulti().catch(quiet); }   /* "Without Ryanair" searches again without Ryanair */ else if(H.isDealMode(T)) renderAnywhere(); else { renderRoute(); renderCal(); } };
 const shown=()=>noRyanair?any.deals.map(d=>H.isRyanair(d)?d.alt:d).filter(Boolean):any.deals;
 /* airline logo(s): both when the way back is a different airline (two one-way tickets) */
 const alLogos=d=>H.alLogo(alOf(d),true)+(d.inAirline&&d.inAirline!==alOf(d)?' + '+H.alLogo(d.inAirline,true):'');
@@ -394,8 +394,8 @@ let mc={key:'',res:null,loading:false,msg:'',err:null};
 function mcParams(){
   const s=H.parse(T.start), e=H.parse(T.end);
   const via=T.tripType==='via';
-  return {mode:via?'via':'mc',from:T.from,last:via?(T.viaLast||null):null,stops:via?(T.mcStops||1):2,outFrom:H.fmt(H.add(s,-flex)),outTo:H.fmt(H.add(s,flex)),latest:H.fmt(H.add(e,flex)),
-    minN:T.mcMin||3,maxN:Math.max(T.mcMin||3,T.mcMax||5),currency:T.currency,must:via?(T.viaMid||null):(T.mcMust||null)};
+  return {mode:via?'via':'mc',from:T.from,last:via?(T.viaLast||null):null,stops:via?(T.mcStops||1):(T.mcCities||2),outFrom:H.fmt(H.add(s,-flex)),outTo:H.fmt(H.add(s,flex)),latest:H.fmt(H.add(e,flex)),
+    minN:T.mcMin||3,maxN:Math.max(T.mcMin||3,T.mcMax||5),currency:T.currency,noRy:noRyanair,must:via?(T.viaMid||null):(T.mcMust||null)};
 }
 async function loadMulti(){
   const p=mcParams(), key=JSON.stringify(p); if(mc.key===key) return;
@@ -403,12 +403,16 @@ async function loadMulti(){
   mc={key,res:null,loading:true,msg:'Starting…',err:null}; renderMulti();
   const signal=NET.begin('mc');
   try{ const r=await (p.mode==='via'?MULTI.viaLoop:MULTI.search)({...p,signal},m=>{ if(mc.key===key){ mc.msg=m; renderMulti(); } }); if(mc.key!==key) return; mc.res=r; mc.note=r.note||null; }
-  catch(e){ if(mc.key!==key) return; mc.err='Could not reach Ryanair. Check your internet connection and try again.'; }
+  catch(e){ if(mc.key!==key) return; mc.err='Could not load flights. Check your internet connection and try again.'; }
   mc.loading=false; renderMulti();
 }
-const legLine=(l,i)=>`<div class="mc-leg"><span class="n">${i+1}</span><span>${H.alLogo(H.carrier(l.flight))} ${H.nice(H.parse(l.dep.slice(0,10)))} ${H.time(l.dep)}</span>
+const legBook=l=>l.src==='tp'?(l.link||FLIGHT_SITES[0].url({from:l.from,to:l.to,dep:l.dep.slice(0,10),ret:null,adults:T.adults,children:T.children,cabin:T.cabin}))
+  :RYANAIR.bookUrl({from:l.from,to:l.to,dep:l.dep.slice(0,10),ret:null,adults:T.adults,children:T.children});
+const legLine=(l,i)=>`<div class="mc-leg"><span class="n">${i+1}</span><span>${H.alLogo(l.airline||H.carrier(l.flight))} ${H.nice(H.parse(l.dep.slice(0,10)))} ${H.time(l.dep)}</span>
   <b>${l.from} → ${l.to}</b><span class="p">${priceFmt(l.price)}</span>
-  <a target="_blank" rel="noopener" title="Book this flight on Ryanair" href="${H.esc(RYANAIR.bookUrl({from:l.from,to:l.to,dep:l.dep.slice(0,10),ret:null,adults:T.adults,children:T.children}))}">Book ↗</a></div>`;
+  <a target="_blank" rel="noopener" title="Book this flight" href="${H.esc(legBook(l))}">Book ↗</a></div>`;
+/* multi-city trips under the Airlines menu (Without Ryanair / ticked airlines) */
+const mcTrips=()=>mc.res?mc.res.itineraries.map(it=>H.filterTrip(it,{noRyanair,sel:any.alSel})).filter(Boolean):[];
 const chain=it=>`<div class="chain"><span>${it.legs[0].from}</span><i>✈</i>${it.stops.map((s,i)=>`<span>${H.flag((AP.byCode(it.legs[i].to)||{}).cc)} ${H.esc(s)} <small>${it.nights[i]}n</small> <span title="${H.esc(VISA.info(it.legs[i].to).label)}">${VISA.info(it.legs[i].to).icon}</span></span><i>✈</i>`).join('')}<span>${it.legs[it.legs.length-1].to}</span></div>`;
 const nightsOf=it=>it.nights.reduce((a,b)=>a+b,0);
 const mcVisaOk=it=>it.legs.slice(0,-1).every(l=>VISA.pass(l.to));
@@ -416,22 +420,24 @@ const mcVisaOk=it=>it.legs.slice(0,-1).every(l=>VISA.pass(l.to));
 function mcSorted(){
   if(!mc.res) return [];
   const q=AP.norm($('#mcQ').value.trim()), max=parseFloat($('#mcMaxP').value), sort=$('#mcSort').value;
-  let L=mc.res.itineraries.filter(it=>mcVisaOk(it)&&(!q||AP.norm(it.legs.slice(0,-1).map(l=>l.city+' '+l.country+' '+l.to).join(' ')).includes(q))&&(isNaN(max)||it.total<=max));
+  let L=mcTrips().filter(it=>mcVisaOk(it)&&(!q||AP.norm(it.legs.slice(0,-1).map(l=>l.city+' '+l.country+' '+l.to).join(' ')).includes(q))&&(isNaN(max)||it.total<=max));
   const nights=nightsOf;
   L.sort(sort==='long'?(a,b)=>nights(b)-nights(a)||a.total-b.total:sort==='balanced'?(a,b)=>a.total/nights(a)-b.total/nights(b):(a,b)=>a.total-b.total);
   return L;
 }
 function renderMulti(){
   const p=mcParams();
-  const via=p.mode==='via', nLegs=via?p.stops+2:3, lastName=via?H.cityOf(p.last):'';
+  const via=p.mode==='via', nLegs=via?p.stops+2:p.stops+1, lastName=via?H.cityOf(p.last):'';
   $('#mcIco').textContent=via?'🧭':'🔀';
-  $('#mcTitle').textContent=via?`${H.cityOf(p.from)} → ${p.stops===2?'? → ?':'?'} → ${lastName} → ${H.cityOf(p.from)}`:'Two cities, one trip';
-  $('#mcSub').innerHTML=via?`Start in <b>${H.esc(H.cityOf(p.from))}</b>, let the fares pick ${p.stops===1?'a city':'two cities'}${p.must?` (in ${H.esc(H.cityOf(p.must))})`:''}, then spend your last nights in <b>${H.esc(lastName)}</b> and fly home to ${H.esc(H.cityOf(p.from))}. Every leg is a direct flight.`:`Fly from <b>${H.esc(H.cityOf(T.from))}</b> to a first city, stay a few nights, hop to a second city, then fly home. Every leg is a direct flight, and you always end up back home.`;
+  $('#mcTitle').textContent=via?`${H.cityOf(p.from)} → ${p.stops===2?'? → ?':'?'} → ${lastName} → ${H.cityOf(p.from)}`:p.stops===1?'One city, one trip':`${p.stops===2?'Two':'Three'} cities, one trip`;
+  $('#mcSub').innerHTML=via?`Start in <b>${H.esc(H.cityOf(p.from))}</b>, let the fares pick ${p.stops===1?'a city':'two cities'}${p.must?` (in ${H.esc(H.cityOf(p.must))})`:''}, then spend your last nights in <b>${H.esc(lastName)}</b> and fly home to ${H.esc(H.cityOf(p.from))}. Every leg is a direct flight.`:`Fly from <b>${H.esc(H.cityOf(T.from))}</b> to ${p.stops===1?'a city, stay a few nights':`${p.stops} cities in a row, a few nights in each`}, then fly home. Every leg is a direct flight, and you always end up back home.`;
   $('#mcWindow').textContent=`Leaving ${H.short(H.parse(p.outFrom))}–${H.short(H.parse(p.outTo))}, home by ${H.nice(H.parse(p.latest))}, ${p.minN}–${p.maxN} nights in each city${p.must?`, visiting ${H.cityOf(p.must)}`:''}. Prices per person, all ${nLegs} flights.`;
   if(mc.loading){ $('#mcPicks').innerHTML=`<div class="loading" style="grid-column:1/-1">${H.esc(mc.msg)}</div>`; $('#mcList').innerHTML=''; return; }
   if(mc.err){ $('#mcPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">${H.esc(mc.err)}</div>`; $('#mcList').innerHTML=''; return; }
-  const all=mc.res?mc.res.itineraries.filter(mcVisaOk):[];
-  if(!all.length){ $('#mcPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">${mc.note?H.esc(mc.note)+' ':''}${mc.res&&mc.res.itineraries.length?`All ${mc.res.itineraries.length} routes were hidden by the visa filter. Tick more visa types in the 🛂 Visa filter. `:''}No routes fit these dates. Try more flexibility (±3), a later "come back" date, or fewer nights per city.</div>`; $('#mcList').innerHTML=''; return; }
+  // a search without Ryanair still lists Ryanair (unticked), so it can be ticked back on
+  renderAlMs(mc.res?[...mc.res.itineraries.flatMap(it=>it.legs.flatMap(l=>[l,l.alt])),...(p.noRy?[{airline:'FR',src:'ryanair'}]:[])].filter(Boolean):[]);
+  const fl=mcTrips(), all=fl.filter(mcVisaOk), nAll=mc.res?mc.res.itineraries.length:0;
+  if(!all.length){ $('#mcPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">${mc.note?H.esc(mc.note)+' ':''}${nAll&&!fl.length?`All ${nAll} routes were hidden by the Airlines filter. `:''}${fl.length?`All ${fl.length} routes were hidden by the visa filter. Tick more visa types in the 🛂 Visa filter. `:''}No routes fit these dates. Try more flexibility (±3), a later "come back" date, or fewer nights per city.</div>`; $('#mcList').innerHTML=''; return; }
   // picks: cheapest, then the cheapest with two different cities, then the longest trip under the median price
   const L=mcSorted(), byPrice=[...all].sort((a,b)=>a.total-b.total), picks=[byPrice[0]];
   const used=it=>it.legs[0].to+'|'+it.legs[1].to;
@@ -618,7 +624,7 @@ function render(){
   $('#multiMode').classList.toggle('hidden',!isMc);
   if(isMc){
     $('#anyMode').classList.add('hidden'); $('#routeMode').classList.add('hidden');
-    $('#routeTitle').innerHTML=T.tripType==='via'?`${H.esc(H.cityOf(T.from))} <em>→ ? →</em> ${H.esc(T.viaLast?H.cityOf(T.viaLast):'last stop')} <em>→</em> home`:`${H.esc(H.cityOf(T.from))} <em>→ 2 cities →</em> home`;
+    $('#routeTitle').innerHTML=T.tripType==='via'?`${H.esc(H.cityOf(T.from))} <em>→ ? →</em> ${H.esc(T.viaLast?H.cityOf(T.viaLast):'last stop')} <em>→</em> home`:`${H.esc(H.cityOf(T.from))} <em>→ ${T.mcCities||2} cit${(T.mcCities||2)===1?'y':'ies'} →</em> home`;
     $('#routeSub').textContent=`${H.nice(H.parse(T.start))} – ${H.nice(H.parse(T.end))} · ±${T.flex} days · ${T.adults} adult${T.adults>1?'s':''}${T.children?' + '+T.children+' child':''}`;
     stopOthers('mc'); renderMulti(); loadMulti().catch(quiet); return;
   }
@@ -652,7 +658,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     f.to.closest('label').style.display=(mcOn||viaOn)?'none':''; $('#swap').style.display=(mcOn||viaOn)?'none':'';
     document.querySelectorAll('.via-only').forEach(el=>el.style.display=viaOn?'':'none'); $('#mcMustLbl').parentNode.style.display=viaOn?'none':'';
     f.nearby.closest('label').style.visibility=(mcOn||viaOn)?'hidden':'';
-    $('#mcStopsWrap').style.display=viaOn?'':'none'; };
+    $('#mcStopsWrap').style.display=viaOn?'':'none'; $('#mcCitiesWrap').style.display=viaOn?'none':''; };
   pills.forEach(b=>b.onclick=()=>{flex=+b.dataset.v;paint();submit();});
   segs.forEach(b=>b.onclick=()=>{tripType=b.dataset.v;paint();submit();});
   paint();
@@ -702,14 +708,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   // multi-city controls
   setAirport($('#viaMid'),T.viaMid||'ANY');
   if(!T.viaLast&&T.to&&T.to!=='ANY'&&T.to!==T.from) H.setTrip({viaLast:T.to}); if(H.trip().viaLast) setAirport($('#viaLast'),H.trip().viaLast);
-  $('#mcStops').value=T.mcStops||1; $('#mcMin').value=T.mcMin||3; $('#mcMax').value=T.mcMax||5; if(T.mcMust) setAirport($('#mcMust'),T.mcMust);
+  $('#mcStops').value=T.mcStops||1; $('#mcCities').value=T.mcCities||2; $('#mcMin').value=T.mcMin||3; $('#mcMax').value=T.mcMax||5; if(T.mcMust) setAirport($('#mcMust'),T.mcMust);
   $('#mcGo').onclick=()=>{ const mn=Math.max(1,+$('#mcMin').value||3), mx=Math.max(mn,+$('#mcMax').value||mn);
     $('#mcMin').value=mn; $('#mcMax').value=mx;
     const vm=$('#viaMid').value.trim()?H.codeOf($('#viaMid')):'ANY', vl=$('#viaLast').value.trim()?H.codeOf($('#viaLast')):'';
     if(T.tripType==='via'&&(!vl||vl==='ANY')){ H.toast('Pick your last stop, e.g. Mallorca'); $('#viaLast').focus(); return; }
     if(T.tripType==='via'&&vl===T.from){ H.toast('The last stop must be different from home'); return; }
-    H.setTrip({viaMid:vm&&vm!=='ANY'?vm:null,viaLast:vl||null,mcStops:+$('#mcStops').value||1,mcMin:mn,mcMax:mx,mcMust:$('#mcMust').value.trim()?H.codeOf($('#mcMust'))||null:null}); render(); };
+    H.setTrip({viaMid:vm&&vm!=='ANY'?vm:null,viaLast:vl||null,mcStops:+$('#mcStops').value||1,mcCities:+$('#mcCities').value||2,mcMin:mn,mcMax:mx,mcMust:$('#mcMust').value.trim()?H.codeOf($('#mcMust'))||null:null}); render(); };
   $('#mcStops').addEventListener('change',()=>$('#mcGo').click());
+  $('#mcCities').addEventListener('change',()=>$('#mcGo').click());
   ['#viaMid','#viaLast'].forEach(s=>$(s).addEventListener('change',()=>{ if(tripType==='via'&&$('#viaLast').value.trim()) submit(); }));
   $('#mcSort').addEventListener('change',()=>{ if(!mc.loading&&mc.res) renderMcList(); });
   ['#mcQ','#mcMaxP'].forEach(s=>$(s).addEventListener('input',()=>{ if(!mc.loading&&mc.res) renderMcList(); }));

@@ -14,7 +14,7 @@ function load(...files) {
   const src = files.map(f => fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8')).join('\n;\n');
   // top-level const/let stay in the script scope, so hand them back explicitly
   const names = '({H, AP, STAYS: typeof STAYS !== "undefined" ? STAYS : null, AIRLINES,' +
-    ' RYANAIR: typeof RYANAIR !== "undefined" ? RYANAIR : null, MULTI: typeof MULTI !== "undefined" ? MULTI : null,' +
+    ' RYANAIR: typeof RYANAIR !== "undefined" ? RYANAIR : null, MULTI: typeof MULTI !== "undefined" ? MULTI : null, MLEGS: typeof MLEGS !== "undefined" ? MLEGS : null,' +
     ' NET: typeof NET !== "undefined" ? NET : null, TP: typeof TP !== "undefined" ? TP : null})';
   vm.runInContext(src + '\n;' + names, ctx);
   return vm.runInContext(names, ctx);
