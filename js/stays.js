@@ -75,6 +75,39 @@ const STAYS = {
     return [...m.values()];
   },
   isHostel(p){ return /hostel|backpack|dorm|bunk|auberge|albergue|ostello|jugendherberge|youth/i.test((p.name||'')+' '+(p.description||'')+' '+(p.type||'')); },
+  /* [lat,lon] of a place, or null (both hotel sources send gps:{latitude,longitude}) */
+  ll(p){ const g=p&&p.gps; if(!g) return null;
+    const a=parseFloat(g.latitude??g.lat), b=parseFloat(g.longitude??g.lng??g.lon);
+    return Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a)<=90&&Math.abs(b)<=180&&(a||b)?[a,b]:null; },
+  /* great-circle distance in km */
+  km(a,b){ const r=Math.PI/180, s1=Math.sin((b[0]-a[0])*r/2), s2=Math.sin((b[1]-a[1])*r/2);
+    return 12742*Math.asin(Math.sqrt(s1*s1+Math.cos(a[0]*r)*Math.cos(b[0]*r)*s2*s2)); },
+  /* the middle of the places (median, so one far-away place does not pull it), when the city centre is unknown */
+  mid(list){ const pts=list.map(p=>this.ll(p)).filter(Boolean); if(!pts.length) return null;
+    const med=a=>{ a=a.slice().sort((x,y)=>x-y); const m=a.length>>1, v=a.length%2?a[m]:(a[m-1]+a[m])/2; return Math.round(v*1e6)/1e6; };
+    return [med(pts.map(p=>p[0])),med(pts.map(p=>p[1]))]; },
+  /* the city centre from the local server (OpenStreetMap), remembered per city; null when unknown */
+  async centre(q){
+    const k='geo:'+q.toLowerCase(), hit=H.load(k,null);
+    if(hit) return hit.lat!=null?[hit.lat,hit.lon]:null;
+    try{ const r=await NET.json('/geo/city?'+new URLSearchParams({q}),{},12000), d=r.data||{};
+      if(!r.ok||!d.ok) return null; H.save(k,{lat:d.lat,lon:d.lon}); return d.lat!=null?[d.lat,d.lon]:null; }catch(e){ return null; }
+  },
+  /* Leaflet, loaded only when a map is shown */
+  _lf:null,
+  leaflet(){
+    if(window.L) return Promise.resolve(window.L);
+    if(this._lf) return this._lf;
+    const base='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
+    const css=document.createElement('link');
+    Object.assign(css,{rel:'stylesheet',href:base+'leaflet.min.css',integrity:'sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb',crossOrigin:'anonymous'});
+    document.head.appendChild(css);
+    return this._lf=new Promise((ok,no)=>{ const s=document.createElement('script');
+      Object.assign(s,{src:base+'leaflet.min.js',integrity:'sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO',crossOrigin:'anonymous'});
+      s.onload=()=>ok(window.L); s.onerror=()=>{ this._lf=null; s.remove(); no(new Error('The map could not load')); };
+      document.head.appendChild(s); });
+  },
+  _map:null,
   /* up to `max` suggestions: cheapest well-rated ones, mixing hostels and hotels when "both" */
   pick(props,kind,nights,max=12){
     const half=Math.ceil(max/2);
@@ -126,6 +159,7 @@ function renderStayWizard(box){
     body=`<div class="st-head"><div><h3>Where to stay in ${H.flag(c.cc)} ${H.esc(c.city)}</h3>
         <p class="sub" style="margin:0">${H.nice(H.parse(c.ci))} → ${H.nice(H.parse(c.co))} · ${c.nights} night${c.nights>1?'s':''} · ${P.adults} adult${P.adults>1?'s':''}${P.children?` + ${P.children} child`:''}</p></div>
         <div class="seg" id="stKind"><button type="button" data-k="both" class="${kind==='both'?'on':''}">Both</button><button type="button" data-k="hostel" class="${kind==='hostel'?'on':''}">Hostels</button><button type="button" data-k="hotel" class="${kind==='hotel'?'on':''}">Hotels</button></div></div>
+      <div class="st-map hidden" id="stMap"></div>
       <div class="st-grid" id="stGrid"><div class="loading" style="grid-column:1/-1">Looking for places to stay in ${H.esc(c.city)}…</div></div>
       <div class="st-own"><b>Found somewhere yourself?</b>
         <div class="sites" style="margin:10px 0">${STAYS.links(c,P.adults).map(s=>`<a class="site" href="${H.esc(s.url)}" target="_blank" rel="noopener"><span class="dot" style="background:${s.color}">${s.ab}</span><span>${s.name}<small>${c.nights} nights ↗</small></span></a>`).join('')}</div>
@@ -187,21 +221,24 @@ async function fillSuggestions(grid,c,P,choose){
       : `<div class="empty" style="grid-column:1/-1">Automatic suggestions with prices need the local server. Close the <code>start.bat</code> window and open it again.<br>Until then, open one of the sites below, pick a place, and enter it here; the totals still work.</div>`;
     return;
   }
+  const ctrP=STAYS.centre(c.city+(c.cc?', '+c.cc:''));                 // asked while the hotels load
   let props;
   try{ props=await STAYS.search(c,P.adults,P.cur); }
   catch(e){ grid.innerHTML=`<div class="empty" style="grid-column:1/-1">Could not load suggestions: ${H.esc(e.message)}. Use the sites below instead.</div>`; return; }
   const kind=P.kind||'both', short=STAYS.pick(props,kind,c.nights,12), full=STAYS.pick(props,kind,c.nights,36);
   if(!short.length){ grid.innerHTML=`<div class="empty" style="grid-column:1/-1">No ${kind==='hostel'?'hostels':kind==='hotel'?'hotels':'places'} found for these dates. Try another filter or the sites below.</div>`; return; }
-  drawSuggestions(grid,c,P,choose,short,full);
+  drawSuggestions(grid,c,P,choose,short,full,await ctrP);
 }
 
 /* the cards; with more places than fit, a button at the end shows them all */
-function drawSuggestions(grid,c,P,choose,list,full){
-  const cur=P.cur, pick=P.picks[P.cities.indexOf(c)], more=full.length-list.length;
-  grid.innerHTML=list.map((h,i)=>`<div class="st-card${pick&&pick.name===h.name?' chosen':''}">
+function drawSuggestions(grid,c,P,choose,list,full,ctr){
+  const cur=P.cur, pick=P.picks[P.cities.indexOf(c)], more=full.length-list.length, mid=ctr||STAYS.mid(full);
+  const far=h=>{ const ll=STAYS.ll(h); if(!ll||!mid) return ''; const d=STAYS.km(ll,mid);
+    return `<div class="s">📍 ${d<1?Math.round(d*20)*50+' m':d.toFixed(1)+' km'} to ${ctr?'the centre':'the middle of these places'}</div>`; };
+  grid.innerHTML=list.map((h,i)=>`<div class="st-card${pick&&pick.name===h.name?' chosen':''}" data-card="${i}">
       <div class="st-img"${h.image?` style="background-image:url('${H.esc(h.image)}'),linear-gradient(135deg,var(--lagoon),var(--sun-l))"`:''}><span class="st-type">${h.hostel?'🛏️ Hostel':'🏨 Hotel'}</span></div>
       <div class="st-body"><b class="st-name">${H.esc(h.name)}</b>
-        <div class="s">${h.stars?'★'.repeat(Math.min(5,h.stars))+' · ':''}${h.rating?`⭐ ${(+h.rating).toFixed(1)}${h.reviews?` (${h.reviews.toLocaleString('en-US')})`:''}`:'no rating yet'}</div>
+        <div class="s">${h.stars?'★'.repeat(Math.min(5,h.stars))+' · ':''}${h.rating?`⭐ ${(+h.rating).toFixed(1)}${h.reviews?` (${h.reviews.toLocaleString('en-US')})`:''}`:'no rating yet'}</div>${far(h)}
         ${h.noPrice
           ?`<div class="st-price"><span>No price found for these dates. Check it, then enter the total:</span></div>
             <div class="row" style="gap:6px;margin-top:6px"><input type="number" min="0" step="1" placeholder="Total ${H.esc(cur)}" data-p="${i}" style="width:110px;padding:8px 10px">
@@ -210,10 +247,36 @@ function drawSuggestions(grid,c,P,choose,list,full){
             <div class="row" style="gap:6px;margin-top:8px"><button class="btn primary sm" data-i="${i}">Choose</button>${h.link?`<a class="btn ghost sm" href="${H.esc(h.link)}" target="_blank" rel="noopener">View ↗</a>`:''}</div>`}
       </div></div>`).join('')
     +(more>0?`<div style="grid-column:1/-1;text-align:center"><button type="button" class="btn ghost sm" data-more>Show ${more} more place${more>1?'s':''}</button></div>`:'');
-  const mb=grid.querySelector('[data-more]'); if(mb) mb.onclick=()=>drawSuggestions(grid,c,P,choose,full,full);
+  const mb=grid.querySelector('[data-more]'); if(mb) mb.onclick=()=>drawSuggestions(grid,c,P,choose,full,full,ctr);
+  drawStayMap(grid.parentNode.querySelector('#stMap'),grid,list,c,P,mid,!!ctr);
   grid.querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.i, h=list[i];
     let total=h.tot;
     if(h.noPrice){ const inp=grid.querySelector(`[data-p="${i}"]`); total=parseFloat(inp.value);
       if(!(total>=0)){ H.toast('Enter the total price you found first'); inp.focus(); return; } }
     choose({name:h.name,total:Math.round(total),link:h.link||'',rating:h.rating,hostel:h.hostel,image:h.image}); });
+}
+
+/* one map with every suggestion as a price pin (per night) and the centre; a pin click shows its card */
+async function drawStayMap(box,grid,list,c,P,ctr,known){
+  if(!box) return;
+  if(STAYS._map){ STAYS._map.remove(); STAYS._map=null; }
+  const pts=list.map((h,i)=>({h,i,ll:STAYS.ll(h)})).filter(x=>x.ll);
+  if(!pts.length){ box.classList.add('hidden'); return; }
+  let L; try{ L=await STAYS.leaflet(); }catch(e){ box.classList.add('hidden'); return; }
+  if(!box.isConnected||!grid.isConnected) return;                       // the planner moved on while the map loaded
+  box.classList.remove('hidden');
+  box.innerHTML=`<div class="st-map-canvas"></div><div class="st-map-key"><span class="st-key hotel">Hotel</span><span class="st-key hostel">Hostel</span><span class="st-key cheap">Cheapest</span>
+    <span class="hint">Prices per night · ⭐ ${known?'city centre':'middle of these places'}</span></div>`;
+  const m=STAYS._map=L.map(box.firstElementChild,{scrollWheelZoom:false});
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'}).addTo(m);
+  const prices=pts.filter(x=>!x.h.noPrice).map(x=>x.h.tot).sort((a,b)=>a-b), cut=prices.length?prices[Math.min(2,prices.length-1)]:-1;
+  const pin=(html,cls)=>L.divIcon({className:'st-pin-wrap',html:`<span class="st-pin ${cls}">${html}</span>`,iconSize:null});
+  if(ctr) L.marker(ctr,{icon:pin(`⭐ ${known?'Centre':'Middle'}`,'centre'),zIndexOffset:-1000,keyboard:false,interactive:false}).addTo(m);
+  pts.forEach(({h,i,ll})=>{
+    const cls=(h.hostel?'hostel':'hotel')+(!h.noPrice&&h.tot<=cut?' cheap':'');
+    L.marker(ll,{icon:pin(h.noPrice?'?':H.esc(H.money(h.tot/c.nights,P.cur)),cls),title:h.name,riseOnHover:true}).addTo(m)
+      .on('click',()=>{ const card=grid.querySelector(`[data-card="${i}"]`); if(!card) return;
+        card.scrollIntoView({behavior:'smooth',block:'center'}); card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash'); });
+  });
+  m.fitBounds(L.latLngBounds([...pts.map(x=>x.ll),...(ctr?[ctr]:[])]),{padding:[36,36],maxZoom:16});
 }

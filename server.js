@@ -130,6 +130,20 @@ async function tripadvisorPlace(city){
   freePlace.set(k, key);
   return key;
 }
+/* the centre of a city (OpenStreetMap Nominatim), for the stay map; cached, since Nominatim asks for few requests */
+const geoCache = new Map();
+async function cityGeo(q){
+  const city = (q.get('q') || '').trim().slice(0, 80), k = city.toLowerCase();
+  if (!city) return out(400, { error: 'q is required' });
+  if (!geoCache.has(k)) {
+    try {
+      const r = await getJson('https://nominatim.openstreetmap.org/search?' + new URLSearchParams({ q: city, format: 'json', limit: '1' }), 10000);
+      const g = Array.isArray(r) && r[0], lat = g ? +g.lat : NaN, lon = g ? +g.lon : NaN;
+      geoCache.set(k, Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : { lat: null, lon: null });
+    } catch (e) { return out(502, { error: 'City lookup failed' }); }       // not cached: try again next time
+  }
+  return out(200, { ok: true, ...geoCache.get(k) });
+}
 async function hotelFree(q){                                             // q: URLSearchParams with q (city), ci, co, adults, currency
   const city = (q.get('q') || '').trim().slice(0, 80), ci = q.get('ci') || '', co = q.get('co') || '';
   const cur = (q.get('currency') || 'EUR').toUpperCase(), adults = String(Math.min(9, Math.max(1, +q.get('adults') || 2)));
@@ -244,7 +258,7 @@ function openBrowser(){
   exec(cmd, () => {});
 }
 
-module.exports = { corsOrigin, tpGet, hotelSearch, hotelFree, flightLive, serpUsage, resolveFile, TYPES };
+module.exports = { corsOrigin, tpGet, hotelSearch, hotelFree, cityGeo, flightLive, serpUsage, resolveFile, TYPES };
 if (require.main !== module) return;                                      // required as a library: don't start the server
 
 const reply = (res, p, req) => p.then(r => send(res, r.status, r.body, null, corsOrigin(req.headers.origin)));
@@ -255,6 +269,7 @@ const server = http.createServer((req, res) => {
   if (url.pathname.startsWith('/tp/')) return reply(res, tpGet(url.pathname.slice(3), url.search), req);
   if (url.pathname === '/hotels/search') return reply(res, hotelSearch(url.searchParams), req);
   if (url.pathname === '/hotels/free') return reply(res, hotelFree(url.searchParams), req);
+  if (url.pathname === '/geo/city') return reply(res, cityGeo(url.searchParams), req);
   if (url.pathname === '/flights/live') return reply(res, flightLive(url.searchParams), req);
   if (url.pathname === '/serpapi/usage') return reply(res, serpUsage(), req);
   serveFile(res, url);
