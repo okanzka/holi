@@ -14,6 +14,11 @@ const H = {
   esc(s){ return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); },
   toast(msg){ let t=document.querySelector('.toast'); if(!t){ t=document.createElement('div'); t.className='toast'; document.body.appendChild(t); }
     t.textContent=msg; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2600); },
+  /* open each http(s) link in its own tab; returns how many the browser blocked
+     (no 'noopener' feature: with it window.open always returns null, so cut the opener by hand) */
+  openLinks(urls){ let blocked=0;
+    urls.filter(u=>/^https?:\/\//i.test(u||'')).forEach(u=>{ const w=window.open(u,'_blank'); if(!w) blocked++; else try{ w.opener=null; }catch(e){} });
+    return blocked; },
 
   /* the current trip, shared by all pages */
   trip(){

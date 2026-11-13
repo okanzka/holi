@@ -223,7 +223,8 @@ function bindDealButtons(root){
     const d=shown().find(x=>x.key===b.dataset.hotel); if(!d) return;
     const ci=String(d.outArr||d.outDep).slice(0,10), co=d.ret||H.fmt(H.add(H.parse(d.dep),Math.max(1,H.diff(H.parse(T.start),H.parse(T.end)))));
     H.setTrip({city:d.destCity,chosen:{ci,co}});
-    STAYS.start({cities:[STAYS.city(d.dest,ci,co)],flightPP:d.pp,cur:d.cur,label:`${d.origin} → ${d.destCity}`});
+    STAYS.start({cities:[STAYS.city(d.dest,ci,co)],flightPP:d.pp,cur:d.cur,label:`${d.origin} → ${d.destCity}`,
+      flights:[{from:d.origin,to:d.dest,dep:d.dep,ret:d.ret||null,url:dealBook(d)}]});
   });
 }
 
@@ -468,7 +469,8 @@ function renderMcList(L){
 const mcShown={p:[],l:[]};
 function bindMcStays(root){ root.querySelectorAll('[data-mcstay]').forEach(b=>b.onclick=()=>{
   const k=b.dataset.mcstay, it=mcShown[k[0]][+k.slice(1)]; if(!it) return;
-  STAYS.start({cities:STAYS.fromLegs(it.legs),flightPP:it.total,cur:it.cur,label:[it.legs[0].from,...it.stops,it.legs[it.legs.length-1].to].join(' → ')}); }); }
+  STAYS.start({cities:STAYS.fromLegs(it.legs),flightPP:it.total,cur:it.cur,label:[it.legs[0].from,...it.stops,it.legs[it.legs.length-1].to].join(' → '),
+    flights:it.legs.map(l=>({from:l.from,to:l.to,dep:l.dep.slice(0,10),url:legBook(l)}))}); }); }
 
 /* =====================================================================
    FARE CALENDAR — week strip / month grid with the lowest fare per day
@@ -604,7 +606,10 @@ function renderCal(){
       <a class="btn ghost sm" target="_blank" rel="noopener" href="${H.esc(FLIGHT_SITES[1].url(q))}">Skyscanner ↗</a>
       ${rt?'<button class="btn ghost sm" id="calStays">🏨 Stays</button>':''}
     </div>`;
-  const cs=$('#calStays'); if(cs) cs.onclick=()=>STAYS.start({cities:[STAYS.city(T.to,(okO&&o.arr?String(o.arr):T.start).slice(0,10),T.end)],flightPP:pp,cur,label:`${T.from} → ${H.cityOf(T.to)}`});
+  const cs=$('#calStays'); if(cs) cs.onclick=()=>STAYS.start({cities:[STAYS.city(T.to,(okO&&o.arr?String(o.arr):T.start).slice(0,10),T.end)],flightPP:pp,cur,label:`${T.from} → ${H.cityOf(T.to)}`,
+    flights:pp!=null&&allRyan?[{from:T.from,to:T.to,dep:T.start,ret:T.end,url:RYANAIR.bookUrl(q)}]
+      :[[o,T.from,T.to,T.start],[b,T.to,T.from,T.end]].map(([x,f,t,d])=>({from:f,to:t,dep:d,url:x&&x.state==='ok'&&x.src==='ryanair'?RYANAIR.bookUrl({from:f,to:t,dep:d,ret:null,adults:T.adults,children:T.children})
+        :x&&x.link||FLIGHT_SITES[0].url({...q,from:f,to:t,dep:d,ret:null})}))});
 }
 
 /* =====================================================================

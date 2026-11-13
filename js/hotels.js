@@ -2,6 +2,7 @@
 (function(){
 const $=s=>document.querySelector(s);
 let S, selected=null;
+const picked=new Set();   // shortlist ids ticked for "Book selected"
 
 function initState(){
   const T=H.trip(), sig=[T.city,T.start,T.end,T.chosen&&T.chosen.ci,T.chosen&&T.chosen.co].join('|');
@@ -13,6 +14,8 @@ function initState(){
 }
 const save=()=>H.save('hotel',S);
 const opts=(ci,co)=>({city:S.city,ci,co,adults:S.adults,children:S.children,rooms:S.rooms,stars:S.stars.join(',')});
+/* the saved link, or a Booking.com search for this place with its own dates */
+const bookUrl=h=>/^https?:\/\//i.test(h.link||'')?h.link:HOTEL_SITES[0].url({...opts(h.ci,h.co),city:[h.name,h.city].filter(Boolean).join(', '),stars:''});
 const weekendNights=(ci,n)=>{ let w=0; for(let i=0;i<n;i++){ const d=H.add(ci,i).getDay(); if(d===5||d===6) w++; } return w; };
 function tier(s){ return s<=45?'great':s<=52?'good':s<=60?'fair':'pricey'; }
 
@@ -76,17 +79,25 @@ function renderShortlist(){
   L.forEach(h=>{ h.pn=h.price/h.nights; h.val=h.rating?h.rating/h.pn:0; });
   L.sort(by==='price'?(a,b)=>a.pn-b.pn:by==='rating'?(a,b)=>(b.rating||0)-(a.rating||0):(a,b)=>b.val-a.val);
   $('#slSub').textContent=L.length?`${L.length} place${L.length>1?'s':''} in ${S.city}.${S.budget?` Budget: ${H.money(+S.budget)} / night.`:''}`:'';
+  $('#bookAll').classList.toggle('hidden',!L.length); $('#bookSel').classList.toggle('hidden',!L.length);
+  const ids=new Set(L.map(h=>String(h.id))); [...picked].forEach(id=>{ if(!ids.has(id)) picked.delete(id); });
+  const paintSel=()=>{ const b=$('#bookSel'); b.disabled=!picked.size; b.textContent=picked.size?`Book selected (${picked.size}) ↗`:'Book selected'; }; paintSel();
   if(!L.length){ $('#shortlist').innerHTML=`<div class="empty">Nothing saved for ${H.esc(S.city)} yet. Pick dates above, browse the sites, and save your favourites. 🌺</div>`; return; }
   $('#shortlist').innerHTML=L.map((h,i)=>{
     const over=S.budget&&h.pn>+S.budget;
     const safeLink=/^https?:\/\//i.test(h.link)?h.link:'';
     return `<div class="item${i===0?' best':''}"><div>
-      <div class="t">${i===0?'🏆 ':''}${H.esc(h.name)}${h.rating?`<span class="stay-pill">⭐ ${h.rating}</span>`:''}${over?'<span class="stay-pill" style="background:var(--r-bg);color:var(--r-fg)">over budget</span>':''}</div>
+      <div class="t"><input type="checkbox" data-pick="${h.id}"${picked.has(String(h.id))?' checked':''} aria-label="Select ${H.esc(h.name)} for booking" style="width:auto;padding:0;box-shadow:none;margin:0 8px 0 0;vertical-align:-2px">${i===0?'🏆 ':''}${H.esc(h.name)}${h.rating?`<span class="stay-pill">⭐ ${h.rating}</span>`:''}${over?'<span class="stay-pill" style="background:var(--r-bg);color:var(--r-fg)">over budget</span>':''}</div>
       <div class="s">${H.esc(h.site)}${h.area?' · '+H.esc(h.area):''} · ${H.short(H.parse(h.ci))} → ${H.short(H.parse(h.co))} (${h.nights} nights)</div></div>
       <div class="row"><div><div class="amt">${H.money(h.pn,h.cur)}<span class="hint"> /night</span></div><div class="hint" style="text-align:right">${H.money(h.price,h.cur)} total</div></div>
-      ${safeLink?`<a class="btn ghost sm" href="${H.esc(safeLink)}" target="_blank" rel="noopener">↗</a>`:''}
+      <a class="btn primary sm" href="${H.esc(bookUrl(h))}" target="_blank" rel="noopener" title="${safeLink?'Open your saved link':'Search this place on Booking.com with your dates'}">Book ↗</a>
       <button class="x" data-del="${h.id}" title="Remove">✕</button></div></div>`;
   }).join('');
+  $('#shortlist').querySelectorAll('[data-pick]').forEach(c=>c.onchange=()=>{ c.checked?picked.add(c.dataset.pick):picked.delete(c.dataset.pick); paintSel(); });
+  const book=list=>{ const n=H.openLinks(list.map(bookUrl));
+    H.toast(n?`Your browser blocked ${n} tab${n>1?'s':''}. Allow pop-ups for this page and try again`:`Opened ${list.length} booking page${list.length>1?'s':''} ✓`); };
+  $('#bookAll').onclick=()=>book(L);
+  $('#bookSel').onclick=()=>book(L.filter(h=>picked.has(String(h.id))));
   $('#shortlist').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
     H.save('shortlist',H.load('shortlist',[]).filter(h=>String(h.id)!==b.dataset.del)); renderShortlist(); });
 }

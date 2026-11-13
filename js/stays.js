@@ -23,11 +23,22 @@ const STAYS = {
   },
   city(code,ci,co){ const a=AP.byCode(code); return {code,city:a?(a.city||a.name):code,cc:a?a.cc:'',ci,co,nights:H.diff(H.parse(ci),H.parse(co))}; },
 
-  /* save the plan and open the hotels page */
-  start({cities,flightPP,cur,label}){
+  /* everything the trip needs booking: each flight, then each chosen stay (plain text; escape when drawing) */
+  bookItems(P){
+    const ok=u=>/^https?:\/\//i.test(u||''), out=[];
+    (P.flights||[]).forEach((f,i)=>{ if(ok(f.url)) out.push({key:'f'+i,kind:'flight',title:`${f.from} → ${f.to}${f.ret?' · return':''}`,
+      sub:H.short(H.parse(f.dep))+(f.ret?' → '+H.short(H.parse(f.ret)):''),url:f.url}); });
+    P.cities.forEach((c,i)=>{ const p=P.picks[i]; if(!p||(!p.total&&!p.link)) return;
+      const url=ok(p.link)?p.link:`https://www.booking.com/searchresults.html?ss=${encodeURIComponent(p.name+' '+c.city)}&checkin=${c.ci}&checkout=${c.co}&group_adults=${P.adults||1}&group_children=${P.children||0}&no_rooms=1`;
+      out.push({key:'s'+i,kind:'stay',cc:c.cc,title:p.name,sub:`${c.city} · ${H.short(H.parse(c.ci))} → ${H.short(H.parse(c.co))}`,url}); });
+    return out;
+  },
+
+  /* save the plan and open the hotels page; `flights` = [{from,to,dep,ret?,url}] to book with the stays */
+  start({cities,flightPP,cur,label,flights}){
     if(!cities||!cities.length){ H.toast('No nights to book on this trip'); return; }
     const t=H.trip();
-    this.save({cities,flightPP:flightPP||null,cur:cur||t.currency,label:label||cities.map(c=>c.city).join(' → '),
+    this.save({cities,flightPP:flightPP||null,cur:cur||t.currency,label:label||cities.map(c=>c.city).join(' → '),flights:flights||[],booked:{},
       adults:t.adults||1,children:t.children||0,picks:[],step:0,kind:'both',created:Date.now()});
     location.href='hotels.html#stays';
   },
@@ -133,6 +144,13 @@ function renderStayWizard(box){
           :`<div class="grand"><small>Per person</small><b>${money(stays/pax)}</b></div>`}
       </div>
       <p class="hint">Stay prices are for the whole stay as shown when you chose them; flight prices are from the option you picked. Confirm both when booking.</p>`;
+    const B=STAYS.bookItems(P), bk=P.booked||{}, left=B.filter(x=>!bk[x.key]).length;
+    if(B.length) body+=`<h3 style="margin-top:22px">Book your trip</h3>
+      <p class="sub" style="margin:0 0 10px">Each link opens the airline or stay site with your dates filled in. Book one by one, or everything at once.</p>
+      <div class="list">${B.map(x=>{ const on=!!bk[x.key];
+        return `<div class="item"><div><div class="t">${x.kind==='flight'?'✈️':H.flag(x.cc)||'🏨'} ${H.esc(x.title)}${on?'<span class="stay-pill">Booked ✓</span>':''}</div><div class="s">${x.kind==='flight'?'Flight':'Stay'} · ${H.esc(x.sub)}</div></div>
+          <div class="row"><a class="btn ${on?'ghost':'primary'} sm" href="${H.esc(x.url)}" target="_blank" rel="noopener">Book ↗</a><button type="button" class="btn ghost sm" data-booked="${x.key}">${on?'Undo':'Mark booked'}</button></div></div>`; }).join('')}</div>
+      <div class="row" style="margin-top:12px"><button type="button" class="btn ocean" id="stBookAll"${left?'':' disabled'}>${left?`Book all ${left} at once ↗`:'All booked ✓'}</button><span class="hint">Opens one tab per booking. Allow pop-ups if your browser asks.</span></div>`;
   }
   box.innerHTML=`<div class="row"><h2 style="margin:0"><span class="ico">🧳</span>Stay planner</h2><span class="spacer"></span>
       <span class="hint">${H.esc(P.label)}</span><button class="btn ghost sm" id="stClear">✕ Clear plan</button></div>
@@ -142,7 +160,7 @@ function renderStayWizard(box){
   const go=i=>{ const p=STAYS.plan(); p.step=i; STAYS.save(p); renderStayWizard(box); box.scrollIntoView({behavior:'smooth',block:'start'}); };
   box.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>go(+b.dataset.step));
   box.querySelector('#stClear').onclick=()=>{ if(confirm('Clear this stay plan?')){ STAYS.clear(); renderStayWizard(box); } };
-  const choose=pick=>{ const p=STAYS.plan(); p.picks[p.step]=pick;
+  const choose=pick=>{ const p=STAYS.plan(); p.picks[p.step]=pick; if(p.booked) delete p.booked['s'+p.step];   // a new place is not booked yet
     const next=p.cities.findIndex((_,i)=>i>p.step&&!p.picks[i]); p.step=next>=0?next:p.cities.length;
     STAYS.save(p); H.toast(`${pick.name} chosen ✓`); renderStayWizard(box); box.scrollIntoView({behavior:'smooth',block:'start'}); };
   if(step<n){
@@ -152,6 +170,13 @@ function renderStayWizard(box){
       choose({name:f.name.value.trim(),total:+f.total.value,link:/^https?:\/\//i.test(f.link.value)?f.link.value:'',manual:true}); };
     box.querySelector('#stSkip').onclick=e=>{ e.preventDefault(); choose({name:'No booking needed',total:0}); };
     fillSuggestions(box.querySelector('#stGrid'),c,P,choose);
+  }else{
+    box.querySelectorAll('[data-booked]').forEach(b=>b.onclick=()=>{ const p=STAYS.plan(), k=b.dataset.booked;
+      p.booked=p.booked||{}; if(p.booked[k]) delete p.booked[k]; else p.booked[k]=true; STAYS.save(p); renderStayWizard(box); });
+    const all=box.querySelector('#stBookAll');
+    if(all) all.onclick=()=>{ const p=STAYS.plan(), bk=p.booked||{};
+      const blocked=H.openLinks(STAYS.bookItems(p).filter(x=>!bk[x.key]).map(x=>x.url));
+      H.toast(blocked?`Your browser blocked ${blocked} tab${blocked>1?'s':''}. Allow pop-ups for this page and try again`:'Opened every booking site. Mark each one booked when done ✓'); };
   }
 }
 
