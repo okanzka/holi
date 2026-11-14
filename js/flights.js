@@ -108,7 +108,7 @@ function priced(d){
 const fits=d=>!budgetOn()||priced(d).tripTotal<=T.budget;
 const cost=d=>budgetOn()?d.tripTotal:d.pp;           // what "cheapest" sorts by
 const stayLine=d=>`<div class="meta">✈️ ${H.money(d.total,d.cur)} + 🏨 ${d.stayTotal!=null
-    ?`${H.money(d.stayTotal,d.cur)} <span class="fn">${d.stayNights} night${d.stayNights>1?'s':''} · ${d.stay.src==='live'?'cheapest live price':'estimate'}</span>`
+    ?`${H.money(d.stayTotal,d.cur)} <span class="fn">${d.stayNights} night${d.stayNights>1?'s':''} · ${d.stay.src==='live'?'live price':'estimate'}</span>`
     :'<span class="fn">stay price unknown</span>'}</div>
   <div class="meta"><b>≈ ${H.money(d.tripTotal,d.cur)}</b> trip total · budget ${H.money(T.budget,d.cur)}</div>`;
 /* ask the free hotel source for the cheapest night in the 10 cities most likely to fit (one lookup per city and dates) */
@@ -123,7 +123,7 @@ async function fillStays(list){
   bud.asked+=go.length; go.forEach(([k])=>bud.stays.set(k,{loading:true}));
   await pool(go,3,async([k,d])=>{ let night=null; const s=stayDates(d);
     try{ const r=await NET.json('/hotels/free?'+new URLSearchParams({q:d.destCity,ci:s.ci,co:s.co,adults:Math.min(2,T.adults||1),currency:d.cur||T.currency,limit:6}),{},40000);
-      if(r.ok&&r.data&&r.data.ok) night=BUDGET.cheapest(r.data.properties); }catch(e){}
+      if(r.ok&&r.data&&r.data.ok) night=BUDGET.cheapNight(r.data.properties); }catch(e){}
     bud.stays.set(k,{night});                        // no live price: the estimate stays
     clearTimeout(bud.timer); bud.timer=setTimeout(()=>{ if(H.isDealMode(T)&&!any.loading&&!any.error) renderAnywhere(); },200); });
 }
@@ -146,7 +146,7 @@ function renderAnywhere(){
   const origNames=fromAny?`${any.origins.length} cities`:fromCountry?`${any.origins.length} airports in ${H.cityOf(T.from)}`:any.origins.join(', ');
   $('#anySub').textContent = all.length
     ? `${all.length} option${all.length>1?'s':''}${hidden?` (${hidden} hidden by the visa filter)`:''} found from ${origNames}${T.to!=='ANY'?' to '+H.cityOf(T.to):''}, leaving ${H.short(H.parse(r.outFrom))}–${H.short(H.parse(r.outTo))}${T.tripType==='rt'?`, returning ${H.short(H.parse(r.inFrom))}–${H.short(H.parse(r.inTo))}`:''}. Prices per person.`
-      +(budgetOn()?` Budget ${H.money(T.budget)} for flight + stay, ${pax()} traveller${pax()>1?'s':''}${over?` (${over} over budget hidden)`:''}. Stay: cheapest live price where found, otherwise an estimate.`:'')
+      +(budgetOn()?` Budget ${H.money(T.budget)} for flight + stay, ${pax()} traveller${pax()>1?'s':''}${over?` (${over} over budget hidden)`:''}. Stay: average of the 3 cheapest live prices where found, otherwise an estimate.`:'')
     : '';
   if(!all.length&&cand.length){
     $('#anyPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">Nothing fits a budget of ${H.esc(H.money(T.budget))} for flight + stay. The cheapest trip here is about ${H.esc(H.money(Math.min(...cand.map(d=>d.tripTotal))))}. Raise the budget or try shorter or more flexible dates.</div>`;

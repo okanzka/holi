@@ -33,9 +33,10 @@ test('trip total = flight for everyone + night x nights x rooms; no stay price k
   assert.deepStrictEqual({ ...BUDGET.total({ total: 300, nights: 4 }, null, t) }, { stay: null, total: 300, nights: 4 });
 });
 
-test('cheapest night ignores places without a price', () => {
-  assert.equal(BUDGET.cheapest([{ night: null }, { night: 80 }, { night: 45 }]), 45);
-  assert.equal(BUDGET.cheapest([{ night: null }]), null);
+test('cheap night = average of the 3 cheapest priced places, so one dorm bed does not set the price', () => {
+  assert.equal(BUDGET.cheapNight([{ night: 19 }, { night: 33 }, { night: null }, { night: 32 }, { night: 75 }]), 28);
+  assert.equal(BUDGET.cheapNight([{ night: null }, { night: 80 }, { night: 45 }]), 63);
+  assert.equal(BUDGET.cheapNight([{ night: null }]), null);
 });
 
 test('free hotel search can be asked for fewer rate lookups (limit)', async () => {

@@ -15,5 +15,7 @@ const BUDGET = {
   total(d,stay,t){ const nights=this.nights(d,t);
     const s=stay&&stay.night ? Math.round(stay.night*nights*this.rooms(t)) : null;
     return { stay:s, total:Math.round(d.total+(s||0)), nights }; },
-  cheapest(props){ const n=(props||[]).map(p=>p.night).filter(x=>x>0); return n.length?Math.min(...n):null; },
+  /* average of the 3 cheapest priced places: one dorm-bed price alone would make the stay look too cheap */
+  cheapNight(props){ const n=(props||[]).map(p=>p.night).filter(x=>x>0).sort((a,b)=>a-b).slice(0,3);
+    return n.length?Math.round(n.reduce((a,b)=>a+b,0)/n.length):null; },
 };

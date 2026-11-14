@@ -9,3 +9,5 @@ Thumbs.db
 desktop.ini
 _*.html
 serpapi.key
+__pycache__/
+.impeccable/
