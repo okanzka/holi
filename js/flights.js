@@ -150,6 +150,7 @@ const alChanged=()=>{ if(T.tripType==='mc'||isVia(T.tripType)){ renderMulti(); l
 const shown=()=>noRyanair?any.deals.map(d=>H.isRyanair(d)?d.alt:d).filter(Boolean):any.deals;
 /* airline logo(s): both when the way back is a different airline (two one-way tickets) */
 const alLogos=d=>H.alLogo(alOf(d),true)+(d.inAirline&&d.inAirline!==alOf(d)?' + '+H.alLogo(d.inAirline,true):'');
+const AL_ALWAYS=['IB','UX'];                        // always in the Airlines menu (Iberia, Air Europa), even with no fare yet
 const alOk=d=>!any.alSel||!any.alSel.size||any.alSel.has(alOf(d));
 /* "Airlines" multi-select next to the visa filter: All / Without Ryanair, or tick the airlines you want.
    Shares its state with the airline chips (any.alSel, noRyanair). */
@@ -164,7 +165,7 @@ function renderAlMs(list){
     document.addEventListener('click',e=>{ if(!host.contains(e.target)) host.classList.remove('open'); });
   }
   const cnt={}; list.forEach(d=>{ const c=alOf(d); cnt[c]=(cnt[c]||0)+1; });
-  const sel=any.alSel||new Set(), codes=[...new Set([...Object.keys(cnt),...[...sel].filter(c=>c!=='-')])].sort((a,b)=>(cnt[b]||0)-(cnt[a]||0));
+  const sel=any.alSel||new Set(), codes=[...new Set([...Object.keys(cnt),...[...sel].filter(c=>c!=='-'),...AL_ALWAYS])].sort((a,b)=>(cnt[b]||0)-(cnt[a]||0));
   host.querySelector('.ms-list').innerHTML=codes.length?codes.map(c=>`<label class="ms-opt"><input type="checkbox" value="${H.esc(c)}"${H.alTicked(c,{noRyanair,sel})?' checked':''}><span>${H.alLogo(c,true)} <small>${cnt[c]||0} option${cnt[c]===1?'':'s'}</small></span></label>`).join('')
     :'<div class="empty" style="padding:8px">Search first to see the airlines.</div>';
   host.querySelectorAll('.ms-list input').forEach(b=>b.onchange=()=>{

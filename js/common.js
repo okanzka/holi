@@ -320,7 +320,7 @@ const EXPLORE_SITES = [
 const FLIGHT_SITES = [
   { name:'Google Flights', color:'#4285f4', ab:'G', url(o){
       const q = o.ret ? `Flights from ${o.from} to ${o.to} on ${o.dep} through ${o.ret}` : `One way flights from ${o.from} to ${o.to} on ${o.dep}`;
-      return `https://www.google.com/travel/flights?q=${encodeURIComponent(q+` for ${o.adults} adults`+(o.children?` and ${o.children} children`:'')+(o.cabin!=='economy'?` ${o.cabin.replace('_',' ')} class`:''))}`; } },
+      return `https://www.google.com/travel/flights?q=${encodeURIComponent(q+` for ${o.adults} adults`+(o.children?` and ${o.children} children`:'')+(o.cabin!=='economy'?` ${o.cabin.replace('_',' ')} class`:'')+(o.airline?` on ${o.airline}`:''))}`; } },
   { name:'Skyscanner', color:'#0770e3', ab:'S', url(o){
       const y=s=>s.slice(2).replace(/-/g,'');
       const cab={economy:'economy',premium_economy:'premiumeconomy',business:'business',first:'first'}[o.cabin];
@@ -340,6 +340,9 @@ const FLIGHT_SITES = [
   { name:'Trip.com', color:'#287dfa', ab:'T', url(o){
       const cab={economy:'y',premium_economy:'s',business:'c',first:'f'}[o.cabin];
       return `https://www.trip.com/flights/showfarefirst?dcity=${o.from.toLowerCase()}&acity=${o.to.toLowerCase()}&ddate=${o.dep}${o.ret?'&rdate='+o.ret+'&triptype=rt':'&triptype=ow'}&class=${cab}&quantity=${o.adults}&searchboxarg=t`; } },
+  /* no public fare API for these two: Google Flights showing only their flights */
+  { name:'Iberia', color:'#d7192d', ab:'IB', url(o){ return FLIGHT_SITES[0].url({...o,airline:'Iberia'}); } },
+  { name:'Air Europa', color:'#0a2d6e', ab:'UX', url(o){ return FLIGHT_SITES[0].url({...o,airline:'Air Europa'}); } },
 ];
 function kayakish(base,o){
   const cab={economy:'',premium_economy:'/premium',business:'/business',first:'/first'}[o.cabin];
