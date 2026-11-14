@@ -147,11 +147,12 @@ async function cityGeo(q){
 async function hotelFree(q){                                             // q: URLSearchParams with q (city), ci, co, adults, currency
   const city = (q.get('q') || '').trim().slice(0, 80), ci = q.get('ci') || '', co = q.get('co') || '';
   const cur = (q.get('currency') || 'EUR').toUpperCase(), adults = String(Math.min(9, Math.max(1, +q.get('adults') || 2)));
+  const limit = Math.min(18, Math.max(3, +q.get('limit') || 18));        // fewer rate lookups for a quick "cheapest night" check
   const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v);
   if (!city || !isDate(ci) || !isDate(co) || co <= ci) return out(400, { error: 'q, ci and co are required; co must be after ci' });
   const empty = out(200, { ok: true, properties: [] });
   if (!XO_CUR.includes(cur)) return empty;                                // this source has no prices in that currency
-  const ck = [city.toLowerCase(), ci, co, adults, cur].join('|'), hit = freeCache.get(ck);
+  const ck = [city.toLowerCase(), ci, co, adults, cur, limit].join('|'), hit = freeCache.get(ck);
   if (hit && Date.now() - hit.t < 6 * 3600 * 1000) return out(200, hit.body);
   try {
     const place = await tripadvisorPlace(city);
@@ -161,9 +162,9 @@ async function hotelFree(q){                                             // q: U
     if (l.error || !l.result) return out(502, { error: (l.error && l.error.message) || 'Xotelo list failed' });
     // a Wikidata match can be a different place with the same name: the hotel pages must name this city
     if (!place.checked && !(l.result.list || []).slice(0, 3).some(h => plain(String(h.url).split('-Reviews-')[1] || '').includes(plain(city)))) return empty;
-    // every hostel on the list (they are few) and the best-value hotels: 18 rate lookups at most
+    // every hostel on the list (they are few) and the best-value hotels: `limit` (18) rate lookups at most
     const all = l.result.list || [], isHostel = h => /hostel/i.test(h.accommodation_type || '');
-    const picked = [...all.filter(isHostel).slice(0, 8), ...all.filter(h => !isHostel(h))].slice(0, 18);
+    const picked = [...all.filter(isHostel).slice(0, 8), ...all.filter(h => !isHostel(h))].slice(0, limit);
     const nights = Math.round((Date.parse(co) - Date.parse(ci)) / 864e5);
     const props = [];
     for (let i = 0; i < picked.length; i += 9) props.push(...await Promise.all(picked.slice(i, i + 9).map(async h => {

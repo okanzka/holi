@@ -95,6 +95,39 @@ async function loadAnywhere(){
     console.warn(e); any.loading=false; any.error='Could not load fares. Press Search to try again.'; renderAnywhere(); }
 }
 
+/* ---------- trip budget: flight + stay as one total; live stay prices for the likeliest cities, an estimate for the rest ---------- */
+const bud={stays:new Map(),key:'',asked:0,timer:0};   // stays: "city|ci|co" -> {night} (live) or {loading}
+const budgetOn=()=>+T.budget>0;
+function stayDates(d){ const ci=String(d.outArr||d.outDep).slice(0,10);
+  return {ci,co:d.ret||H.fmt(H.add(H.parse(ci),BUDGET.nights(d,T)))}; }
+const stayKey=d=>{ const s=stayDates(d); return d.destCity+'|'+s.ci+'|'+s.co; };
+function priced(d){
+  const live=bud.stays.get(stayKey(d)), est=BUDGET.estimate((AP.byCode(d.dest)||{}).cc,d.cur);
+  d.stay=live&&live.night?{night:live.night,src:'live'}:est?{night:est,src:'est'}:null;
+  const t=BUDGET.total(d,d.stay,T); d.stayTotal=t.stay; d.tripTotal=t.total; d.stayNights=t.nights; return d; }
+const fits=d=>!budgetOn()||priced(d).tripTotal<=T.budget;
+const cost=d=>budgetOn()?d.tripTotal:d.pp;           // what "cheapest" sorts by
+const stayLine=d=>`<div class="meta">✈️ ${H.money(d.total,d.cur)} + 🏨 ${d.stayTotal!=null
+    ?`${H.money(d.stayTotal,d.cur)} <span class="fn">${d.stayNights} night${d.stayNights>1?'s':''} · ${d.stay.src==='live'?'cheapest live price':'estimate'}</span>`
+    :'<span class="fn">stay price unknown</span>'}</div>
+  <div class="meta"><b>≈ ${H.money(d.tripTotal,d.cur)}</b> trip total · budget ${H.money(T.budget,d.cur)}</div>`;
+/* ask the free hotel source for the cheapest night in the 10 cities most likely to fit (one lookup per city and dates) */
+async function fillStays(list){
+  if(!budgetOn()) return;
+  if(bud.key!==any.key){ bud.key=any.key; bud.asked=0; }
+  const svc=await STAYS.available(); if(!svc||!svc.free) return;
+  const todo=new Map();
+  [...list].sort((a,b)=>a.tripTotal-b.tripTotal).filter(d=>d.tripTotal<=T.budget*1.25)
+    .forEach(d=>{ const k=stayKey(d); if(!bud.stays.has(k)&&!todo.has(k)) todo.set(k,d); });
+  const go=[...todo].slice(0,Math.max(0,10-bud.asked)); if(!go.length) return;
+  bud.asked+=go.length; go.forEach(([k])=>bud.stays.set(k,{loading:true}));
+  await pool(go,3,async([k,d])=>{ let night=null; const s=stayDates(d);
+    try{ const r=await NET.json('/hotels/free?'+new URLSearchParams({q:d.destCity,ci:s.ci,co:s.co,adults:Math.min(2,T.adults||1),currency:d.cur||T.currency,limit:6}),{},40000);
+      if(r.ok&&r.data&&r.data.ok) night=BUDGET.cheapest(r.data.properties); }catch(e){}
+    bud.stays.set(k,{night});                        // no live price: the estimate stays
+    clearTimeout(bud.timer); bud.timer=setTimeout(()=>{ if(H.isDealMode(T)&&!any.loading&&!any.error) renderAnywhere(); },200); });
+}
+
 function renderAnywhere(){
   const fromCountry=H.isCountry(T.from), fromAny=T.from==='ANY';
   $('#anyFrom').textContent=fromAny?`anywhere to ${H.cityOf(T.to)}`:H.cityOf(T.from)+(T.nearby&&!fromCountry?' & nearby':'')+(T.to!=='ANY'?' to '+H.cityOf(T.to):'');
@@ -108,22 +141,26 @@ function renderAnywhere(){
   if(any.error){ $('#anyPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">${H.esc(any.error)}</div>`; $('#deals').innerHTML=''; return; }
   const visaOk=shown().filter(d=>VISA.pass(d.pCode));
   renderAlChips(any.deals.flatMap(d=>[d,d.alt]).filter(d=>d&&VISA.pass(d.pCode)));   // every airline stays in the menu, also the hidden ones
-  const all=visaOk.filter(alOk);
+  const cand=visaOk.filter(alOk), all=cand.filter(fits), over=cand.length-all.length;
   const hidden=any.deals.length-visaOk.length;   // the airline chips are a separate filter
   const origNames=fromAny?`${any.origins.length} cities`:fromCountry?`${any.origins.length} airports in ${H.cityOf(T.from)}`:any.origins.join(', ');
   $('#anySub').textContent = all.length
     ? `${all.length} option${all.length>1?'s':''}${hidden?` (${hidden} hidden by the visa filter)`:''} found from ${origNames}${T.to!=='ANY'?' to '+H.cityOf(T.to):''}, leaving ${H.short(H.parse(r.outFrom))}–${H.short(H.parse(r.outTo))}${T.tripType==='rt'?`, returning ${H.short(H.parse(r.inFrom))}–${H.short(H.parse(r.inTo))}`:''}. Prices per person.`
+      +(budgetOn()?` Budget ${H.money(T.budget)} for flight + stay, ${pax()} traveller${pax()>1?'s':''}${over?` (${over} over budget hidden)`:''}. Stay: cheapest live price where found, otherwise an estimate.`:'')
     : '';
+  if(!all.length&&cand.length){
+    $('#anyPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">Nothing fits a budget of ${H.esc(H.money(T.budget))} for flight + stay. The cheapest trip here is about ${H.esc(H.money(Math.min(...cand.map(d=>d.tripTotal))))}. Raise the budget or try shorter or more flexible dates.</div>`;
+    $('#deals').innerHTML=''; fillStays(cand); return; }
   if(!all.length){
     $('#anyPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">No flights found from ${H.esc(origNames)}${T.to!=='ANY'?' to '+H.esc(H.cityOf(T.to)):''} in this window. ${T.nearby||fromCountry?'':'Tick <b>Also search nearby airports</b>, or '}use the all-airline sites below. 👇</div>`;
     $('#deals').innerHTML=''; return; }
 
   // top 3 picks: cheapest, then cheapest that's closest to your dates, then a "long stay" value pick
-  const byPrice=[...all].sort((a,b)=>a.pp-b.pp);
+  const byPrice=[...all].sort((a,b)=>cost(a)-cost(b));
   const picks=[byPrice[0]];
-  const fitPick=[...all].sort((a,b)=>a.fit-b.fit||a.pp-b.pp).find(d=>!picks.includes(d)); if(fitPick) picks.push(fitPick);
+  const fitPick=[...all].sort((a,b)=>a.fit-b.fit||cost(a)-cost(b)).find(d=>!picks.includes(d)); if(fitPick) picks.push(fitPick);
   for(const d of byPrice){ if(picks.length>=3) break; if(!picks.includes(d)) picks.push(d); }
-  const labels=['Cheapest','Closest to your dates','Great value'];
+  const labels=[budgetOn()?'Cheapest trip':'Cheapest','Closest to your dates','Great value'];
   $('#anyPicks').innerHTML=picks.map((d,i)=>`<div class="pick"><span class="rank">#${i+1}</span>
       <span class="badge ${i===1?'b-good':'b-great'}">${labels[i]}</span>
       <h3>${H.flag(d.cc)} ${H.esc(d.pCity)}${d.tag?` <span class="from-tag">${d.tag}</span>`:''}</h3>
@@ -133,13 +170,14 @@ function renderAnywhere(){
       <div class="meta">${H.nice(H.parse(d.dep))} ${H.time(d.outDep)}${d.ret?` → ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} · ${d.nights} nights`:''}</div>
       <div class="meta">${alLogos(d)} <span class="fn">${H.esc([d.outFlight,d.inFlight].filter(Boolean).join(' / '))}</span> ${stopTag(d)}</div>
       ${altLine(d)}
-      <div class="meta">≈ ${H.money(d.total,d.cur)} for ${pax()} traveller${pax()>1?'s':''}</div>
+      ${budgetOn()?stayLine(d):`<div class="meta">≈ ${H.money(d.total,d.cur)} for ${pax()} traveller${pax()>1?'s':''}</div>`}
       <div class="actions">
         <a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(dealBook(d))}">Book${d.src==='tp'?'':' on Ryanair'} ↗</a>
         <button class="btn ghost sm" data-route="${d.dest}" data-origin="${d.origin}">📅 All dates</button>
         <button class="btn ghost sm" data-hotel="${d.key}">🏨 Stays</button></div></div>`).join('');
   renderDealList();
   bindDealButtons($('#anyPicks'));
+  fillStays(cand);
 }
 
 const alOf=d=>H.alOf(d);
@@ -202,14 +240,14 @@ const altLine=d=>{ const a=d.alt; if(!a) return '';
 
 function renderDealList(){
   const q=AP.norm($('#qDest').value.trim()), max=parseFloat($('#qMax').value), sort=$('#qSort').value;
-  let L=shown().filter(d=>VISA.pass(d.pCode)&&alOk(d)&&(!q||AP.norm(`${d.pCity} ${d.pCountry} ${d.pCode}`).includes(q))&&(isNaN(max)||d.pp<=max));
-  L.sort(sort==='fit'?(a,b)=>a.fit-b.fit||a.pp-b.pp:sort==='name'?(a,b)=>a.pCity.localeCompare(b.pCity):(a,b)=>a.pp-b.pp);
+  let L=shown().filter(d=>VISA.pass(d.pCode)&&alOk(d)&&(!q||AP.norm(`${d.pCity} ${d.pCountry} ${d.pCode}`).includes(q))&&(isNaN(max)||d.pp<=max)&&fits(d));
+  L.sort(sort==='fit'?(a,b)=>a.fit-b.fit||cost(a)-cost(b):sort==='name'?(a,b)=>a.pCity.localeCompare(b.pCity):(a,b)=>cost(a)-cost(b));
   if(!L.length){ $('#deals').innerHTML='<div class="empty">Nothing matches these filters.</div>'; return; }
   $('#deals').innerHTML=L.map(d=>`<div class="deal">
       <span class="fl">${H.flag(d.cc)||'✈️'}</span>
       <div><div class="t">${H.esc(d.pCity)}<small>${H.esc(d.pCountry)} · ${d.pCode}</small>${d.tag?`<span class="from-tag">${d.tag}</span>`:''} ${VISA.badge(d.pCode)}</div>
         <div class="s">${alLogos(d)} ${stopTag(d)} 🛫 ${H.nice(H.parse(d.dep))} ${H.time(d.outDep)} <span class="fn">${H.esc(d.outFlight||'')}</span>${d.ret?` &nbsp;🛬 ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} <span class="fn">${H.esc(d.inFlight||'')}</span> · ${d.nights} nights`:' · one way'}</div>${altLine(d)}</div>
-      <div class="amt">${H.money(d.pp,d.cur)}<small>per person · ≈ ${H.money(d.total,d.cur)} total</small></div>
+      <div class="amt">${H.money(d.pp,d.cur)}<small>per person · ${budgetOn()?`≈ ${H.money(d.tripTotal,d.cur)} with ${d.stayTotal!=null?`stay${d.stay.src==='est'?' (est.)':''}`:'flights only'}`:`≈ ${H.money(d.total,d.cur)} total`}</small></div>
       <div class="acts">
         <a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(dealBook(d))}">Book ↗</a>
         <a class="btn ghost sm" target="_blank" rel="noopener" title="Compare all airlines on Google Flights" href="${H.esc(FLIGHT_SITES[0].url({from:d.origin,to:d.dest,dep:d.dep,ret:d.ret,adults:T.adults,children:T.children,cabin:T.cabin}))}">Compare ↗</a>
@@ -670,7 +708,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const f=$('#f'); T=H.trip(); flex=T.flex; tripType=T.tripType;
   setAirport(f.from,T.from); setAirport(f.to,T.to);
   f.start.value=T.start; f.end.value=T.end; f.adults.value=T.adults; f.children.value=T.children; f.cabin.value=T.cabin;
-  f.currency.value=T.currency; f.minNights.value=T.minNights||''; f.nearby.checked=!!T.nearby; f.direct.checked=!!T.direct;
+  f.currency.value=T.currency; f.minNights.value=T.minNights||''; f.budget.value=T.budget||''; f.nearby.checked=!!T.nearby; f.direct.checked=!!T.direct;
   const pills=[...document.querySelectorAll('#flexPills button')], segs=[...document.querySelectorAll('#tripType button')];
   const paint=()=>{ pills.forEach(b=>b.classList.toggle('on',+b.dataset.v===flex)); segs.forEach(b=>b.classList.toggle('on',b.dataset.v===tripType));
     $('#endWrap').style.display=tripType==='ow'?'none':'';
@@ -681,6 +719,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     document.querySelectorAll('.via-only').forEach(el=>el.style.display=viaOn?'':'none'); document.querySelectorAll('.open-only').forEach(el=>el.style.display=openOn?'':'none');
     $('#viaLastLbl').textContent=openOn?'Last stop':'Last stop, then home'; $('#mcMustLbl').parentNode.style.display=viaOn?'none':'';
     f.nearby.closest('label').style.visibility=(mcOn||viaOn)?'hidden':'';
+    f.budget.closest('label').style.display=(mcOn||viaOn)?'none':'';   // the budget applies to Anywhere and country searches
     $('#mcStopsWrap').style.display=viaOn?'':'none'; $('#mcCitiesWrap').style.display=viaOn?'none':''; };
   pills.forEach(b=>b.onclick=()=>{flex=+b.dataset.v;paint();submit();});
   segs.forEach(b=>b.onclick=()=>{tripType=b.dataset.v;paint();submit();});
@@ -707,7 +746,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       if(tripType==='open'){ const ve=endCode(); if(!ve) return; if(ve===vl){ H.toast('B must be different from the last stop'); $('#viaEnd').focus(); return; } viaPatch.viaEnd=ve; }
     }
     H.setTrip({...viaPatch,from,to:to||T.to,city:H.hotelCity(to||T.to),start:f.start.value,end:f.end.value,flex,tripType,nearby:f.nearby.checked,
-      adults:+f.adults.value||1,children:+f.children.value||0,cabin:f.cabin.value,currency:f.currency.value,minNights:+f.minNights.value||0,direct:f.direct.checked});
+      adults:+f.adults.value||1,children:+f.children.value||0,cabin:f.cabin.value,currency:f.currency.value,minNights:+f.minNights.value||0,budget:Math.max(0,+f.budget.value||0),direct:f.direct.checked});
     selected=null; $('#detail').classList.remove('show'); if(force===true) searchAgain(); render();
   }
   f.onsubmit=e=>{e.preventDefault();submit(true);};

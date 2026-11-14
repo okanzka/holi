@@ -52,6 +52,7 @@
       <label class="f span-2">Currency<select name="currency">
         <option>EUR</option><option>GBP</option><option>PLN</option><option>HUF</option><option>CZK</option><option>SEK</option><option>DKK</option><option>NOK</option><option>USD</option><option>TRY</option></select></label>
       <label class="f span-2">Shortest stay<input type="number" name="minNights" min="1" max="60" placeholder="any"></label>
+      <label class="f span-2" title="Flight + stay for everyone. Used when the destination is Anywhere or a country">Trip budget<input type="number" name="budget" min="0" step="50" placeholder="any"></label>
       <div class="f span-3 lbl">🛂 Visa (Turkish passport)<div id="visaMs"></div></div>
       <div class="f span-3 lbl">✈️ Airlines<div id="alMs"></div></div>
       <label class="check span-5" style="align-self:end;padding-bottom:12px"><input type="checkbox" name="nearby"> Also search nearby airports (≤ 250 km)</label>
@@ -190,6 +191,7 @@
 <script src="js/common.js"></script>
 <script src="js/visa.js"></script>
 <script src="js/stays.js"></script>
+<script src="js/budget.js"></script>
 <script src="js/flights.js"></script>
 </body>
 </html>
