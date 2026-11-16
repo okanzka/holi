@@ -177,7 +177,8 @@ function renderStayWizard(box){
         ${fl!=null?`<div><small>Flights (${pax} traveller${pax>1?'s':''})</small><b>${money(fl)}</b></div><div class="grand"><small>Whole trip</small><b>${money(stays+fl)}</b><span>${money((stays+fl)/pax)} per person</span></div>`
           :`<div class="grand"><small>Per person</small><b>${money(stays/pax)}</b></div>`}
       </div>
-      <p class="hint">Stay prices are for the whole stay as shown when you chose them; flight prices are from the option you picked. Confirm both when booking.</p>`;
+      <p class="hint">Stay prices are for the whole stay as shown when you chose them; flight prices are from the option you picked. Confirm both when booking.</p>
+      <div class="row end" style="margin-top:12px"><a class="btn ocean sm" href="things.html">🎟️ Things to do in ${P.cities.length>1?'these cities':H.esc(P.cities[0].city)} →</a></div>`;
     const B=STAYS.bookItems(P), bk=P.booked||{}, left=B.filter(x=>!bk[x.key]).length;
     if(B.length) body+=`<h3 style="margin-top:22px">Book your trip</h3>
       <p class="sub" style="margin:0 0 10px">Each link opens the airline or stay site with your dates filled in. Book one by one, or everything at once.</p>

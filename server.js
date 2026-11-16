@@ -251,7 +251,7 @@ function serveFile(res, url){
   });
 }
 
-const SITE = `http://localhost:${PORT}/flights.html`;
+const SITE = `http://localhost:${PORT}/index.html`;
 function openBrowser(){
   if (process.env.NO_OPEN) return;
   const { exec } = require('child_process');

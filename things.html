@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heybe · Things to do</title>
+<meta name="theme-color" content="#f2f5f9">
+<script>try{if(localStorage.getItem('heybe.theme')==='dark'){document.documentElement.dataset.theme='dark';document.querySelector('meta[name=theme-color]').content='#000000';}}catch(e){}</script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎟️</text></svg>">
+<style>
+  a.th-card{color:inherit;text-decoration:none}
+  .th-card .st-img{height:160px}
+  .th-links{gap:14px;margin-top:auto;padding-top:8px;font-size:.85rem;font-weight:600;color:var(--ocean)}
+  .th-map{cursor:pointer}
+  .th-x{border:0;background:none;padding:0 0 0 4px;font:inherit;color:var(--muted);cursor:pointer}
+</style>
+</head>
+<body data-page="things">
+<nav class="nav"><div class="wrap">
+  <a class="logo" href="index.html"><span>🌴</span>heybe</a>
+  <ul><li><a class="link" data-page="flights" href="index.html">✈️ Flights</a></li>
+      <li><a class="link" data-page="hotels" href="hotels.html">🏨 Hotels</a></li>
+      <li><a class="link" data-page="things" href="things.html">🎟️ Things to do</a></li>
+      <li><a class="link" data-page="help" href="help.html">🧭 How to use</a></li></ul>
+</div></nav>
+
+<header class="hero small photo"><div class="wrap">
+  <span class="eyebrow">🎟️ Things to do</span>
+  <h1>What's worth <em>seeing</em></h1>
+  <p class="lead">The 10 most famous sights in every city of your trip, with photos, a short note and a map link.</p>
+</div></header>
+
+<main class="wrap lift">
+  <section class="card">
+    <h2><span class="ico">🗺️</span>Your cities</h2>
+    <p class="sub">Taken from your trip and stay plan. Add any other city too.</p>
+    <div class="al-chips" id="cityChips"></div>
+    <form id="addCity" class="row"><input name="city" placeholder="Add a city, e.g. Seville" style="flex:1;min-width:200px" maxlength="80"><button class="btn primary sm">Add</button></form>
+  </section>
+  <div id="things"></div>
+  <section class="note" style="margin-top:24px">ℹ️ Sights come from Wikipedia and Wikidata, ranked by how many languages Wikipedia covers them in. Check opening hours and tickets before you go.</section>
+</main>
+<footer><div class="s">heybe</div>Go see it all 🗺️</footer>
+
+<script src="js/airports.js"></script>
+<script src="js/common.js"></script>
+<script src="js/stays.js"></script>
+<script src="js/things.js"></script>
+</body>
+</html>

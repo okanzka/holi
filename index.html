@@ -3,101 +3,195 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Heybe · Holiday Planner</title>
+<title>Heybe · Flights</title>
 <meta name="theme-color" content="#f2f5f9">
 <script>try{if(localStorage.getItem('heybe.theme')==='dark'){document.documentElement.dataset.theme='dark';document.querySelector('meta[name=theme-color]').content='#000000';}}catch(e){}</script>
 <link rel="stylesheet" href="css/style.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌴</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✈️</text></svg>">
 </head>
-<body data-page="home">
+<body data-page="flights">
 <nav class="nav"><div class="wrap">
   <a class="logo" href="index.html"><span>🌴</span>heybe</a>
-  <ul><li><a class="link" data-page="home" href="index.html">Home</a></li>
-      <li><a class="link" data-page="flights" href="flights.html">✈️ Flights</a></li>
+  <ul><li><a class="link" data-page="flights" href="index.html">✈️ Flights</a></li>
       <li><a class="link" data-page="hotels" href="hotels.html">🏨 Hotels</a></li>
+      <li><a class="link" data-page="things" href="things.html">🎟️ Things to do</a></li>
       <li><a class="link" data-page="help" href="help.html">🧭 How to use</a></li></ul>
 </div></nav>
 
-<header class="hero photo"><div class="wrap">
-  <span class="eyebrow">☀️ Your holiday, packed</span>
-  <h1>Where to <em>next</em>, traveler?</h1>
-  <p class="lead">Pick your week, tell us how flexible you are, and we'll lay out every date combo, point you to the best-looking deals, and open them on all the big booking sites at once.</p>
-  <div class="countdown" id="countdown"></div>
+<header class="hero small photo"><div class="wrap">
+  <span class="eyebrow">✈️ Flight finder</span>
+  <h1 id="routeTitle">Let's find your <em>wings</em></h1>
+  <p class="lead" id="routeSub"></p>
 </div></header>
 
 <main class="wrap lift">
+  <!-- search -->
   <section class="card">
-    <h2><span class="ico">🧳</span>Plan a trip</h2>
-    <p class="sub">This trip is shared with the Flights and Hotels pages.</p>
-    <form id="tripForm" class="grid g-search">
-      <label class="f span-3">From<input name="from" data-ac data-anywhere required placeholder="City, airport or code (e.g. Nürnberg)"></label>
+    <div class="row" style="margin-bottom:16px">
+      <h2 style="margin:0"><span class="ico">🧭</span>Your trip</h2><span class="spacer"></span>
+      <div class="seg" id="tripType"><button type="button" data-v="rt">Round trip</button><button type="button" data-v="ow">One way</button><button type="button" data-v="mc">🔀 Multi-city</button><button type="button" data-v="via">🧭 ? → Last stop → Home</button><button type="button" data-v="open">🛬 ? → Last stop → B</button></div>
+    </div>
+    <form id="f" class="grid g-search">
+      <label class="f span-3">From<input name="from" data-ac data-anywhere required placeholder="City, airport, code or Anywhere"></label>
       <button type="button" class="swap" id="swap" title="Swap" style="grid-column:span 1">⇄</button>
-      <label class="f span-3">To<input name="to" data-ac data-anywhere required placeholder="🌍 Anywhere, or a city"></label>
+      <label class="f span-3">To<input name="to" data-ac data-anywhere required placeholder="Anywhere, or a city"></label>
+      <label class="f span-2 via-only">Via<input id="viaMid" data-ac data-anywhere placeholder="🌍 Anywhere"></label>
+      <label class="f span-2 via-only"><span id="viaLastLbl">Last stop, then home</span><input id="viaLast" data-ac placeholder="e.g. Mallorca"></label>
+      <label class="f span-2 open-only">Finish at (B)<input id="viaEnd" data-ac placeholder="e.g. Istanbul"></label>
       <label class="f span-2">Leave around<input type="date" name="start" required></label>
-      <label class="f span-3">Come back around<input type="date" name="end" required></label>
-      <label class="f span-6">How flexible are you?
+      <label class="f span-3" id="endWrap">Come back around<input type="date" name="end"></label>
+      <label class="f span-6">Flexibility (days before &amp; after)
         <div class="flex-pills" id="flexPills">
-          <button type="button" data-v="0">Exact dates</button><button type="button" data-v="1">± 1 day</button>
-          <button type="button" data-v="2">± 2 days</button><button type="button" data-v="3">± 3 days</button><button type="button" data-v="4">± 4 days</button>
-        </div></label>
+          <button type="button" data-v="0">Exact</button><button type="button" data-v="1">± 1</button><button type="button" data-v="2">± 2</button>
+          <button type="button" data-v="3">± 3</button><button type="button" data-v="4">± 4</button></div></label>
       <label class="f span-2">Adults<input type="number" name="adults" min="1" max="9"></label>
       <label class="f span-2">Children<input type="number" name="children" min="0" max="8"></label>
       <label class="f span-2">Cabin<select name="cabin">
-        <option value="economy">Economy</option><option value="premium_economy">Premium economy</option>
+        <option value="economy">Economy</option><option value="premium_economy">Premium eco.</option>
         <option value="business">Business</option><option value="first">First</option></select></label>
-      <div class="span-12 row end">
-        <a class="btn ghost" href="hotels.html" id="goHotels">🏨 Hotels only</a>
-        <button class="btn primary" type="submit">Find my flights ✈️</button>
+      <label class="f span-2">Currency<select name="currency">
+        <option>EUR</option><option>GBP</option><option>PLN</option><option>HUF</option><option>CZK</option><option>SEK</option><option>DKK</option><option>NOK</option><option>USD</option><option>TRY</option></select></label>
+      <label class="f span-2">Shortest stay<input type="number" name="minNights" min="1" max="60" placeholder="any"></label>
+      <label class="f span-2" title="Flight + stay for everyone. Used when the destination is Anywhere or a country">Trip budget<input type="number" name="budget" min="0" step="50" placeholder="any"></label>
+      <div class="f span-3 lbl">🛂 Visa (Turkish passport)<div id="visaMs"></div></div>
+      <div class="f span-3 lbl">✈️ Airlines<div id="alMs"></div></div>
+      <label class="check span-5" style="align-self:end;padding-bottom:12px"><input type="checkbox" name="nearby"> Also search nearby airports (≤ 250 km)</label>
+      <label class="check span-6" style="align-self:center"><input type="checkbox" name="direct"> Direct flights only</label>
+      <div class="span-6 row end" style="align-self:end">
+        <button class="btn primary" type="submit">Search 🌅</button>
       </div>
     </form>
   </section>
 
-  <div class="tiles">
-    <a class="tile t1" href="flights.html"><span class="big">✈️</span><h3>Flight finder</h3><p>Live prices to every destination from your airport, a flexible date grid, and 8 booking sites.</p></a>
-    <a class="tile t2" href="hotels.html"><span class="big">🏝️</span><h3>Hotel hunter</h3><p>Shift your stay, compare 7 hotel sites, keep a shortlist with real prices.</p></a>
+  <!-- shown when the page is not opened through server.js -->
+  <section class="tp-banner hidden" id="tpBanner"></section>
+
+  <!-- ================= ANYWHERE MODE ================= -->
+  <div id="anyMode" class="hidden">
+    <section class="card">
+      <div class="row"><h2 style="margin:0"><span class="ico">🏆</span>Best deals from <span id="anyFrom"></span></h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
+      <p class="sub" style="margin-top:6px" id="anySub"></p>
+      <div class="picks" id="anyPicks"></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="ico">🌍</span><span id="dealsTitle">Every destination</span></h2>
+      <div class="al-chips" id="alChips"></div>
+      <div class="filters">
+        <label class="f">Search<input id="qDest" placeholder="Country or city…"></label>
+        <label class="f">Max price / person<input id="qMax" type="number" min="0" placeholder="any"></label>
+        <label class="f">Sort by<select id="qSort"><option value="price">Cheapest</option><option value="fit">Closest to my dates</option><option value="name">Destination A–Z</option></select></label>
+      </div>
+      <div class="list" id="deals"></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="ico">🔭</span>Check every airline too</h2>
+      <p class="sub">The live prices above are Ryanair's (it's the only big airline whose prices a web page can read). These sites search all airlines, including Lufthansa, Eurowings, Wizz Air, Pegasus, SunExpress and Turkish Airlines, for "anywhere" on your dates:</p>
+      <div class="sites" id="exploreSites"></div>
+    </section>
   </div>
 
-  <section class="card" id="tips" style="margin-top:28px">
-    <h2><span class="ico">💡</span>How to travel for less</h2>
-    <div class="tips">
-      <div class="tip"><span class="e">📅</span><b>Fly mid-week</b><p>Tuesday and Wednesday departures are often the cheapest. Friday and Sunday are usually the priciest.</p></div>
-      <div class="tip"><span class="e">🔀</span><b>Flex by a day or two</b><p>Moving one day either side can change fares a lot. That's what the date grid is for.</p></div>
-      <div class="tip"><span class="e">🕵️</span><b>Compare sites</b><p>Meta-search sites (Google, Skyscanner, Kayak) find different fares than agencies like Kiwi or Trip.com.</p></div>
-      <div class="tip"><span class="e">🏷️</span><b>Write prices down</b><p>Type each fare you see into the planner. It ranks your real options for you.</p></div>
-    </div>
+  <!-- ================= MULTI-CITY MODE ================= -->
+  <div id="multiMode" class="hidden">
+    <section class="card">
+      <div class="row"><h2 style="margin:0"><span class="ico" id="mcIco">🔀</span><span id="mcTitle">Two cities, one trip</span></h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
+      <p class="sub" style="margin-top:6px" id="mcSub"></p>
+      <div class="filters">
+        <label class="f" id="mcCitiesWrap">Cities to visit<select id="mcCities"><option value="1">1 city</option><option value="2">2 cities</option><option value="3">3 cities (slower)</option></select></label>
+        <label class="f" id="mcStopsWrap">Cities before the last stop<select id="mcStops"><option value="1">1 city</option><option value="2">2 cities</option></select></label>
+        <label class="f">Nights per city (min)<input id="mcMin" type="number" min="1" max="14"></label>
+        <label class="f">Nights per city (max)<input id="mcMax" type="number" min="1" max="14"></label>
+        <label class="f"><span id="mcMustLbl">Must visit (optional)</span><input id="mcMust" data-ac placeholder="🌍 Anywhere, or a country/city…"></label>
+        <label class="f">Sort by<select id="mcSort"><option value="price">Cheapest</option><option value="long">Longest trip</option><option value="balanced">Best value per night</option></select></label>
+        <button class="btn primary" id="mcGo" type="button" style="align-self:end">Find routes 🔀</button>
+      </div>
+      <p class="hint" id="mcWindow"></p>
+      <div class="picks" id="mcPicks"></div>
+    </section>
+    <section class="card">
+      <h2><span class="ico">🗺️</span>All route ideas</h2>
+      <div class="filters"><label class="f">Search<input id="mcQ" placeholder="Filter by city or country…"></label>
+        <label class="f">Max total / person<input id="mcMaxP" type="number" min="0" placeholder="any"></label></div>
+      <div class="list" id="mcList"></div>
+    </section>
+  </div>
+
+  <!-- ================= ROUTE MODE ================= -->
+  <div id="routeMode" class="hidden">
+    <!-- Pegasus-style fare calendar -->
+    <section class="card fare-cal">
+      <div class="row"><h2 style="margin:0"><span class="ico">📅</span>Fare calendar</h2>
+        <span class="live-tag">Lowest fare per day</span><span id="calSrc"></span><span class="spacer"></span>
+        <div class="seg" id="calView"><button type="button" data-v="week">Week</button><button type="button" data-v="month">Month</button></div></div>
+      <p class="sub" style="margin-top:6px">Pick a day to see the fares on the days around it. Green = cheapest day in view. Prices are per person, one way; the logo shows the airline.</p>
+      <div class="legs" id="legs">
+        <div class="leg">
+          <div class="leg-h"><span class="leg-ic">🛫</span><b>Departure</b><span id="legOutRoute"></span></div>
+          <div id="calOut"></div>
+        </div>
+        <div class="leg" id="legBack">
+          <div class="leg-h"><span class="leg-ic">🛬</span><b>Return</b><span id="legBackRoute"></span></div>
+          <div id="calBack"></div>
+        </div>
+      </div>
+      <div class="cal-sum" id="calSum"></div>
+    </section>
+
+    <section class="card">
+      <div class="row"><h2 style="margin:0"><span class="ico">🏆</span>Top picks for you</h2><span class="spacer"></span><span class="live-tag hidden" id="liveTag">Live prices</span></div>
+      <p class="sub" style="margin-top:6px" id="picksSub"></p>
+      <div class="picks" id="picks"></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="ico">🗓️</span>Flexible date grid</h2>
+      <p class="sub" id="gridSub">Click any square to search those dates on every site, or to save a fare you found. ★ = your original dates.</p>
+      <div class="matrix-wrap"><table class="matrix" id="matrix"></table></div>
+      <div class="legend">
+        <span><i class="c-great"></i>Likely cheapest</span><span><i class="c-good"></i>Good bet</span>
+        <span><i class="c-fair"></i>Average</span><span><i class="c-pricey"></i>Likely pricey</span>
+        <span><i class="c-price"></i>Real price</span><span><i class="c-best"></i>Cheapest real price</span>
+      </div>
+    </section>
+
+    <section class="card detail" id="detail">
+      <div class="row"><h2 style="margin:0" id="dTitle"></h2><span class="spacer"></span>
+        <button class="btn ghost sm" id="useHotel">🏨 Use for hotels</button>
+        <button class="btn ocean sm" id="openAll">Open all sites ↗</button></div>
+      <p class="sub" id="dSub" style="margin-top:6px"></p>
+      <div class="sites" id="dSites"></div>
+      <div class="live-box" id="liveBox">
+        <div class="row"><button class="btn primary sm" id="liveBtn">🔴 Live price · all airlines</button><small class="sub" id="liveQuota">Google Flights, right now. Uses 1 search from your monthly quota.</small></div>
+        <div id="liveRes"></div></div>
+      <div class="row" style="background:var(--sand);padding:14px;border-radius:16px">
+        <b>💰 Found a fare?</b>
+        <input type="number" id="fPrice" placeholder="Total price" min="0" style="width:150px">
+        <select id="fSite" style="width:170px"></select>
+        <input id="fNote" placeholder="Airline / note (optional)" style="flex:1;min-width:160px">
+        <button class="btn primary sm" id="fSave">Save fare</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="row"><h2 style="margin:0"><span class="ico">📒</span>Fares you've saved</h2><span class="spacer"></span>
+        <button class="btn ghost sm" id="clearFares">Clear this route</button></div>
+      <p class="sub" style="margin-top:6px">Cheapest first. These feed into the top picks above.</p>
+      <div class="list" id="fares"></div>
+    </section>
+  </div>
+
+  <section class="note" style="margin-top:24px" id="srcNote">
+    ℹ️ <b>Live prices</b> come straight from Ryanair's public fare finder, per person, and may change at checkout (bags and seats are extra). Squares without a live price are coloured by an <b>estimate</b> (day of week and how far from your plan). For other airlines, open the site buttons and save the prices you find; the planner will rank them.
   </section>
 </main>
-<footer><div class="s">heybe</div>Pack light, travel far 🌊</footer>
+<footer><div class="s">heybe</div>Window seat, please 🌤️</footer>
 
 <script src="js/airports.js"></script>
 <script src="js/common.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded',()=>{
-  const f=document.getElementById('tripForm'), t=H.trip();
-  setAirport(f.from,t.from); setAirport(f.to,t.to);
-  f.start.value=t.start; f.end.value=t.end; f.adults.value=t.adults; f.children.value=t.children; f.cabin.value=t.cabin;
-  let flex=t.flex;
-  const pills=[...document.querySelectorAll('#flexPills button')];
-  const paint=()=>pills.forEach(b=>b.classList.toggle('on',+b.dataset.v===flex));
-  pills.forEach(b=>b.onclick=()=>{flex=+b.dataset.v;paint();}); paint();
-  document.getElementById('swap').onclick=()=>{ const a=H.codeOf(f.from), b=H.codeOf(f.to); setAirport(f.from,b); setAirport(f.to,a); };
-  f.start.onchange=()=>{ if(!f.end.value||f.end.value<=f.start.value) f.end.value=H.fmt(H.add(H.parse(f.start.value),7)); };
-
-  const collect=()=>{ const to=H.codeOf(f.to), from=H.codeOf(f.from); if(!from||!to){ H.toast("Pick airports from the list"); return null; } if(from==="ANY"&&to==="ANY"){ H.toast("Pick a city or country on at least one side"); return null; }
-    return H.setTrip({from,to,city:H.hotelCity(to),
-      start:f.start.value,end:f.end.value,flex,adults:+f.adults.value||1,children:+f.children.value||0,cabin:f.cabin.value,chosen:null}); };
-  f.onsubmit=e=>{ e.preventDefault(); if(f.end.value<=f.start.value){H.toast('Return must be after departure');return;} if(collect()) location.href='flights.html'; };
-  document.getElementById('goHotels').onclick=e=>{ if(f.start.value&&f.end.value>f.start.value) collect(); };
-
-  // countdown
-  const cd=document.getElementById('countdown');
-  const tick=()=>{ const s=H.parse(H.trip().start); const ms=s-new Date();
-    if(ms<=0){ cd.innerHTML='<div><b>🎉</b><span>Bon voyage!</span></div>'; return; }
-    const d=Math.floor(ms/864e5), h=Math.floor(ms/36e5)%24, m=Math.floor(ms/6e4)%60;
-    cd.innerHTML=`<div><b>${d}</b><span>days</span></div><div><b>${h}</b><span>hours</span></div><div><b>${m}</b><span>mins</span></div>
-      <div style="text-align:left"><b style="font-size:1.1rem">${H.esc(H.trip().to==='ANY'?'Somewhere sunny':H.cityOf(H.trip().to))}</b><span>until take-off</span></div>`; };
-  tick(); setInterval(tick,30000);
-});
-</script>
+<script src="js/visa.js"></script>
+<script src="js/stays.js"></script>
+<script src="js/budget.js"></script>
+<script src="js/flights.js"></script>
 </body>
 </html>
