@@ -115,7 +115,7 @@ const AIRLINES={FR:'Ryanair',RK:'Ryanair UK',AL:'Malta Air (Ryanair)',RR:'Buzz (
   W6:'Wizz Air',PC:'Pegasus',XQ:'SunExpress',TK:'Turkish Airlines',EW:'Eurowings',LH:'Lufthansa',U2:'easyJet',DE:'Condor',VY:'Vueling',
   VF:'AJet',GQ:'Sky Express',CA:'Air China',W4:'Wizz Air Malta',EI:'Aer Lingus',SK:'SAS',AZ:'ITA Airways',LO:'LOT',OU:'Croatia Airlines',JU:'Air Serbia',FZ:'flydubai',QR:'Qatar Airways',EK:'Emirates',KK:'AtlasGlobal',X3:'TUIfly',BY:'TUI',V7:'Volotea',EN:'Air Dolomiti','4U':'Germanwings',OS:'Austrian',LX:'SWISS',KL:'KLM',AF:'Air France',BA:'British Airways',IB:'Iberia',A3:'Aegean',TP:'TAP Portugal',
   EY:'Etihad Airways',UX:'Air Europa',SN:'Brussels Airlines',BT:'airBaltic',FB:'Bulgaria Air',RO:'TAROM',SU:'Aeroflot',MS:'EgyptAir',AT:'Royal Air Maroc',ET:'Ethiopian Airlines',SV:'Saudia',G9:'Air Arabia',J2:'Azerbaijan Airlines',PS:'UIA',H4:'HiSky',D8:'Norwegian',DY:'Norwegian',BJ:'Nouvelair',TU:'Tunisair',OR:'TUI',
-  XC:'Corendon',AC:'Air Canada',AY:'Finnair',AA:'American Airlines',KM:'KM Malta Airlines','4Y':'Discover Airlines',ZQ:'German Airways',W9:'Wizz Air UK'};
+  XC:'Corendon',AC:'Air Canada',AY:'Finnair',AA:'American Airlines',KM:'KM Malta Airlines','4Y':'Discover Airlines',ZQ:'German Airways',W9:'Wizz Air UK',MW:'Malta Air',A4:'Azimuth'};
 
 /* ---------- airport database + search ---------- */
 const AP = (()=>{

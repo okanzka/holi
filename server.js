@@ -238,8 +238,9 @@ function resolveFile(pathname){
   try { p = decodeURIComponent(pathname); } catch (e) { return null; }      // malformed, e.g. "/%"
   if (p === '/') p = '/index.html';
   const file = path.normalize(path.join(ROOT, p));
-  // stay inside the site folder, and never serve key files, git data or this script
-  if (!file.startsWith(ROOT + path.sep) || /\.key$|server\.js$|[\\/]\.git([\\/]|$)/i.test(file)) return null;
+  // only the site itself: the pages in the root, and the css, js and image folders
+  const rel = path.relative(ROOT, file).split(path.sep).join('/');
+  if (!/^[\w-]+\.html$|^(css|js|background-image)\/[^/]+$/i.test(rel)) return null;
   return file;
 }
 function serveFile(res, url){

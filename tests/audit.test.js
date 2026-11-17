@@ -60,3 +60,17 @@ test('MCP find_deals names the airline of an all-airline fare without a flight n
   const r = await HEYBE_TOOLS.run('find_deals', { from: 'NUE', to: 'AYT', depart_from: '2027-05-01' });
   assert.equal(r.deals[0].airline, 'Pegasus');
 });
+
+test('the local server serves only the site, not tests, tools or notes', () => {
+  const { resolveFile } = require('../server.js');
+  for (const p of ['/tests/load.js', '/mcp/holi-mcp.js', '/.claude/settings.json', '/PRODUCT.md', '/streamlit_app.py', '/package.json', '/README.md', '/start.bat'])
+    assert.strictEqual(resolveFile(p), null, p + ' should not be served');
+  for (const p of ['/', '/index.html', '/hotels.html', '/things.html', '/help.html', '/flights.html', '/css/style.css', '/js/common.js', '/background-image/raw.webp'])
+    assert.notStrictEqual(resolveFile(p), null, p + ' should be served');
+});
+
+test('airlines MW and A4 have names', () => {
+  const { AIRLINES } = load('airports.js', 'common.js');
+  assert.equal(AIRLINES.MW, 'Malta Air');
+  assert.equal(AIRLINES.A4, 'Azimuth');
+});

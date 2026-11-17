@@ -17,6 +17,7 @@ NAV_RE = re.compile(r"""location\.href\s*=\s*(['"])([a-z]+\.html[^'"]*)\1""")
 
 # runs first inside every page: route clicks on local *.html links through the shell
 ROUTER = """<script>
+try{if(parent.__hash)location.hash=parent.__hash;}catch(e){}
 document.addEventListener('click',e=>{const a=e.target.closest('a[href]');if(!a)return;
 const h=a.getAttribute('href');if(/^[a-z]+\\.html/.test(h)){e.preventDefault();parent.__go(h);}},true);
 </script>"""
@@ -56,7 +57,7 @@ const P={esc(json.dumps(pages))}, A={esc(json.dumps(assets))}, CSS={esc(json.dum
 const S='<'+'/script>';
 function build(n){{return P[n].replace('<!--CSS-->','<style>'+CSS+'</'+'style>')
   .replace(/<!--JS:([\\w.]+)-->/g,(m,k)=>'<script>'+A[k]+S);}}
-window.__go=u=>{{const n=u.split('#')[0]; if(P[n]) document.getElementById('f').srcdoc=build(n);}};
+window.__go=u=>{{const [n,h]=u.split('#'); if(P[n]){{window.__hash=h?'#'+h:''; document.getElementById('f').srcdoc=build(n);}}}};
 __go('index.html');
 </script></body></html>"""
 
