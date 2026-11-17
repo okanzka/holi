@@ -98,17 +98,9 @@ button{-webkit-user-select:none;user-select:none;touch-action:manipulation}
 
 /* ---------- hero: calm, static, light catching the sky ---------- */
 .hero{position:relative;overflow:hidden;color:var(--ink);padding:88px 0 150px;isolation:isolate;
-  --h-a:#ff8a5c; --h-b:#ffc46b; --h-c:#3fb6e8;
   background:linear-gradient(165deg,#0b2240 0%,#123d66 45%,#1b6a8c 100%)}
-.hero::before{content:"";position:absolute;inset:-20% -10% 0;z-index:-1;
-  background:
-    radial-gradient(60% 70% at 85% 10%,color-mix(in srgb,var(--h-a) 70%,transparent),transparent 70%),
-    radial-gradient(50% 60% at 15% 0%,color-mix(in srgb,var(--h-c) 60%,transparent),transparent 70%),
-    radial-gradient(70% 60% at 55% 55%,color-mix(in srgb,var(--h-b) 55%,transparent),transparent 75%);
-  filter:saturate(110%)}
 .hero::after{content:none}
 .hero{color:#fff}
-.countdown div{color:var(--ink)}
 .hero h1{color:#fff}
 .hero p.lead{color:rgba(255,255,255,.86)!important}
 .hero .eyebrow{color:var(--gold)}
@@ -121,7 +113,7 @@ button{-webkit-user-select:none;user-select:none;touch-action:manipulation}
   padding-right:.04em}
 .hero p.lead{font-size:clamp(1.05rem,1.6vw,1.3rem);line-height:1.45;letter-spacing:-.015em;max-width:600px;color:var(--ink-soft);margin:0}
 
-  html[data-theme="dark"] .hero{--h-a:#a1361d; --h-b:#5a2b6e; --h-c:#0b4a8a;background:#000}
+  html[data-theme="dark"] .hero{background:#000}
   html[data-theme="dark"] .hero h1,html[data-theme="dark"] .hero{color:var(--ink)}
   html[data-theme="dark"] .hero::after{content:"";position:absolute;inset:auto 0 0;height:60%;z-index:-1;background:linear-gradient(to bottom,transparent,var(--bg))}
   html[data-theme="dark"] .hero h1 em{background-image:linear-gradient(100deg,#ff7a55 0%,#ffb340 55%,#ff5c8a 100%)}
@@ -139,7 +131,7 @@ main{position:relative;z-index:3}
 .sub{color:var(--ink-soft);margin:-4px 0 18px;font-size:.95rem}
 .grid{display:grid;gap:14px}
 .g-search{grid-template-columns:repeat(12,1fr)}
-.span-1{grid-column:span 1}.span-5{grid-column:span 5}.span-7{grid-column:span 7}.span-8{grid-column:span 8}
+.span-5{grid-column:span 5}.span-8{grid-column:span 8}
 .span-2{grid-column:span 2}.span-3{grid-column:span 3}.span-4{grid-column:span 4}.span-6{grid-column:span 6}.span-12{grid-column:span 12}
 
 /* ---------- fields: filled, no heavy borders ---------- */
@@ -219,7 +211,7 @@ html[data-theme="dark"] .seg button.on,html[data-theme="dark"] .seg-thumb{backgr
 table.matrix{border-collapse:separate;border-spacing:4px;width:100%;min-width:560px}
 .matrix th{font-size:.78rem;font-weight:600;color:var(--ink-soft);padding:8px 6px;white-space:nowrap;text-align:center}
 .matrix th.corner{text-align:left;font-size:.7rem;color:var(--muted)}
-.matrix th.want,.matrix td.want-col{color:var(--coral-d)}
+.matrix th.want{color:var(--coral-d)}
 .matrix td{text-align:center;border-radius:10px;padding:8px 4px;cursor:pointer;font-size:.82rem;font-weight:600;position:relative;min-width:76px;font-variant-numeric:tabular-nums;
   transition:transform var(--t) var(--spring),box-shadow .2s}
 .matrix td:active{transform:scale(.94)}
@@ -258,30 +250,6 @@ table.matrix{border-collapse:separate;border-spacing:4px;width:100%;min-width:56
 .x:active{transform:scale(.9)}
 .x:hover{background:var(--r-bg);color:var(--r-fg)}
 .empty{text-align:center;padding:28px;color:var(--muted);background:var(--sand);border-radius:var(--r-md)}
-
-/* ---------- home tiles ---------- */
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-top:20px}
-.tile{position:relative;overflow:hidden;border-radius:var(--radius);padding:28px;color:#fff;text-decoration:none;min-height:250px;display:flex;flex-direction:column;justify-content:flex-end;
-  box-shadow:var(--shadow);transition:transform var(--t) var(--spring),box-shadow .3s;isolation:isolate}
-.tile:hover{text-decoration:none}
-.tile::after{content:"→";position:absolute;right:24px;bottom:24px;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:600;
-  background:rgba(255,255,255,.22);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:transform var(--t) var(--spring)}
-.tile:active{transform:scale(.98);transition-duration:.12s}
-@media (hover:hover){.tile:hover{box-shadow:var(--shadow-lg)}.tile:hover::after{transform:translateX(4px)}}
-.tile .big{position:absolute;top:20px;left:26px;font-size:3.2rem;filter:drop-shadow(0 6px 14px rgba(0,0,0,.18))}
-.tile h3{font-size:1.75rem;color:#fff;margin:0 0 6px}
-.tile p{margin:0;max-width:85%;opacity:.88;font-size:.95rem;line-height:1.45}
-.tile.t1{background:radial-gradient(120% 90% at 100% 0%,#4fb3ff,transparent 60%),linear-gradient(160deg,#1d5fa8,#0b2240)}
-.tile.t2{background:radial-gradient(120% 90% at 100% 0%,#ffc46b,transparent 60%),linear-gradient(160deg,#ef5a3c,#b80d2a)}
-.tile.t3{background:radial-gradient(120% 90% at 100% 0%,#6fe0c8,transparent 60%),linear-gradient(160deg,#138a8a,#0d4a5c)}
-
-/* ---------- countdown: glass chips over the sky ---------- */
-.countdown{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}
-.countdown div{background:var(--glass);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-radius:var(--r-md);padding:12px 18px;min-width:84px;
-  text-align:center;box-shadow:inset 0 .5px 0 rgba(255,255,255,.6),0 6px 20px -10px rgba(0,0,0,.25)}
-.countdown b{display:block;font:700 2rem/1.1 var(--font-d);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
-.countdown span{font-size:.75rem;font-weight:500;color:var(--ink-soft)}
-html[data-theme="dark"] .countdown div{box-shadow:inset 0 .5px 0 rgba(255,255,255,.15),0 6px 20px -10px rgba(0,0,0,.6)}
 
 /* ---------- tips ---------- */
 .tips{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
@@ -324,7 +292,6 @@ footer .s{font:700 1.3rem/1.4 var(--font-d);letter-spacing:-.03em;color:#fff}
   .nav ul a.link{padding:6px 10px;font-size:.82rem;white-space:nowrap}
   .eyebrow{font-size:.85rem}
   .card h2{font-size:1.3rem}
-  .tile{min-height:210px}
   /* swap button: small, centred, pointing up/down like the stacked fields */
   .g-search .swap{justify-self:center;width:44px;height:40px;margin:-6px 0;rotate:90deg}
   /* flights trip type: 2×2 grid instead of a squeezed pill */
@@ -507,16 +474,9 @@ html[data-theme="dark"] .cal-sum{box-shadow:0 0 0 1px rgba(255,255,255,.08)}
 .mc-legs.compact{margin-top:6px;max-width:560px}
 @media (max-width:760px){.mc-row{grid-template-columns:1fr}.mc-row .amt{text-align:left}.mc-leg{grid-template-columns:22px 1fr auto auto}.mc-leg b{grid-column:2}}
 
-/* ---------- via route row: HOME → [via] → [last stop] → HOME ---------- */
-.route-row{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;background:var(--sand);border-radius:18px;padding:14px 16px;margin:6px 0 4px}
-.route-row label.f{flex:1;min-width:200px}
-.route-row input{background:var(--paper)}
-.route-row i{font-style:normal;color:var(--muted);font-size:1.1rem;padding-bottom:12px}
-.route-row .rr-home{background:var(--ink);color:var(--paper);font-weight:700;border-radius:var(--r-sm);padding:12px 14px;letter-spacing:.02em}
-
 /* ---------- visa badges ---------- */
 .visa{display:inline-flex;align-items:center;gap:4px;font-size:.72rem;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap;vertical-align:middle;font-family:var(--font-b)}
-.v-free,.v-id,.v-permit{background:var(--g-bg);color:var(--g-fg)}
+.v-free,.v-id{background:var(--g-bg);color:var(--g-fg)}
 .v-voa,.v-evisa,.v-eta{background:var(--y-bg);color:var(--y-fg)}
 .v-req{background:var(--r-bg);color:var(--r-fg)}
 .v-schengen{background:var(--b-bg);color:var(--b-fg)}
@@ -638,9 +598,9 @@ html[data-theme="dark"] .st-map .leaflet-tile-pane{filter:invert(1) hue-rotate(1
   @keyframes fade{from{opacity:0}}
 }
 @media (prefers-reduced-transparency:reduce){
-  .nav,.toast,.ac,.ms-pop,.countdown div,.st-type,.tile::after{-webkit-backdrop-filter:none;backdrop-filter:none}
+  .nav,.toast,.ac,.ms-pop,.st-type{-webkit-backdrop-filter:none;backdrop-filter:none}
   .nav{background:var(--paper)}
-  .toast,.ac,.ms-pop,.countdown div,.st-type{background:var(--paper)}
+  .toast,.ac,.ms-pop,.st-type{background:var(--paper)}
 }
 @media (prefers-contrast:more){
   :root{--ink-soft:var(--ink);--muted:var(--ink-soft);--line:rgba(0,0,0,.35)}
@@ -688,7 +648,6 @@ html[data-theme="dark"] .theme-btn .moon{transform:none;opacity:1}
 }
 
 /* ---------- page heroes: a real photo under the type ----------
-   Each page names its own photo first and falls back to the shared one, so a missing file never leaves a blank hero.
    The scrim darkens the left (where the type sits) and the foot (where the card lands). */
 .hero.photo{
   --photo:url("../background-image/raw.webp");

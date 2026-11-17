@@ -493,7 +493,6 @@ function renderMulti(){
   if(!all.length){ $('#mcPicks').innerHTML=`<div class="empty" style="grid-column:1/-1">${mc.note?H.esc(mc.note)+' ':''}${nAll&&!fl.length?`All ${nAll} routes were hidden by the Airlines filter. `:''}${fl.length?`All ${fl.length} routes were hidden by the visa filter. Tick more visa types in the 🛂 Visa filter. `:''}No routes fit these dates. Try more flexibility (±3), a later "come back" date, or fewer nights per city.</div>`; $('#mcList').innerHTML=''; return; }
   // picks: cheapest, then the cheapest with two different cities, then the longest trip under the median price
   const L=mcSorted(), byPrice=[...all].sort((a,b)=>a.total-b.total), picks=[byPrice[0]];
-  const used=it=>it.legs[0].to+'|'+it.legs[1].to;
   const cut=via?-2:-1;   // a fixed last stop is shared by every route, so compare only the cities picked by fares
   const fresh=it=>!picks.some(q=>q.legs.slice(0,cut).some(l=>it.legs.slice(0,cut).some(m=>m.to===l.to)));
   const second=byPrice.find(fresh); if(second) picks.push(second);

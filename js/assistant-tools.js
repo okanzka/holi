@@ -51,12 +51,6 @@ const TOOLS=[
       required:['from','to','depart']}}},required:['options']} },
 ];
 
-const toolLabel={search_airports:i=>`Looking up “${i.query}”`,
-  find_deals:i=>`Checking live fares from ${i.from} to ${i.to||'anywhere'} (${i.depart_from}${i.return_from?' → '+i.return_from:''})`,
-  find_multi_city:i=>`Building routes ${i.home} → ${i.stops===1?'?':'? → ?'}${i.last_stop?' → '+i.last_stop:''} → ${i.home} (${i.min_nights||3}–${i.max_nights||5} nights each)`,
-  route_calendar:i=>`Reading daily prices ${i.from} ⇄ ${i.to}`, get_my_trip:()=>'Reading your saved trip',
-  make_links:i=>`Preparing booking links`, web_search:i=>`Searching the web: “${(i&&i.query)||''}”`};
-
 const today=()=>{ const d=new Date(); d.setHours(0,0,0,0); return d; };
 const clampDate=s=>{ const d=H.parse(s); return (!d||isNaN(d))?H.fmt(today()):(d<today()?H.fmt(today()):s); };
 
@@ -79,11 +73,13 @@ async function runTool(name,input){
   if(name==='find_multi_city'){
     const r=await (input.last_stop?MULTI.viaLoop:MULTI.search)({from:String(input.home).toUpperCase(),last:input.last_stop?String(input.last_stop).toUpperCase():null,stops:input.stops===1?1:2,outFrom:clampDate(input.depart_from),outTo:clampDate(input.depart_to||input.depart_from),
       latest:clampDate(input.home_by),minN:input.min_nights||3,maxN:input.max_nights||5,currency:T.currency,must:input.must_visit?String(input.must_visit).toUpperCase():null});
-    return {airline:'Ryanair (live), prices per person for all flights of the route',travellers:(T.adults||1)+(T.children||0),found:r.itineraries.length,
+    return {airline:'Ryanair (live) + other airlines (recent prices, when available), prices per person for all flights of the route',travellers:(T.adults||1)+(T.children||0),found:r.itineraries.length,
       routes:r.itineraries.slice(0,input.max_results||15).map(it=>({total_per_person:+it.total.toFixed(2),currency:it.cur,stops:it.stops,nights:it.nights,
         visa_per_stop:it.legs.slice(0,-1).map(l=>`${l.to}: ${VISA.info(l.to).label}`),
         legs:it.legs.map(l=>({from:l.from,to:l.to,depart:l.dep.replace('T',' ').slice(0,16),price:l.price,
-          book:RYANAIR.bookUrl({from:l.from,to:l.to,dep:l.dep.slice(0,10),ret:null,adults:T.adults,children:T.children})}))})),
+          airline:AIRLINES[l.airline]||l.airline||'Ryanair',
+          book:l.src==='tp'?(l.link||FLIGHT_SITES[0].url({from:l.from,to:l.to,dep:l.dep.slice(0,10),ret:null,adults:T.adults,children:T.children,cabin:T.cabin}))
+            :RYANAIR.bookUrl({from:l.from,to:l.to,dep:l.dep.slice(0,10),ret:null,adults:T.adults,children:T.children})}))})),
       ...(!r.itineraries.length?{note:'No combinations fit. Suggest more flexible dates, a later home_by, or fewer nights per city.'}:{})};
   }
   if(name==='route_calendar'){
@@ -120,7 +116,7 @@ async function runTool(name,input){
     const deals=[...best.values()].sort((a,b)=>a.pp-b.pp).slice(0,input.max_results||25).map(d=>({
       from:d.origin,to:d.dest,city:d.destCity,country:d.country,
       depart:d.outDep.replace('T',' ').slice(0,16),return:d.inDep?d.inDep.replace('T',' ').slice(0,16):null,
-      nights:d.inDep?H.diff(H.parse(d.outDep.slice(0,10)),H.parse(d.inDep.slice(0,10))):null,price_per_person:d.pp,currency:d.cur,airline:AIRLINES[H.carrier(d.outFlight)]||H.carrier(d.outFlight),stops:Math.max(d.stops||0,d.rstops||0),
+      nights:d.inDep?H.diff(H.parse(d.outDep.slice(0,10)),H.parse(d.inDep.slice(0,10))):null,price_per_person:d.pp,currency:d.cur,airline:AIRLINES[H.alOf(d)]||H.alOf(d),stops:Math.max(d.stops||0,d.rstops||0),
       price_type:d.src==='tp'?'recent Aviasales price (may change)':'live Ryanair price',book:d.src==='tp'?d.link:null,
       visa_turkish_passport:VISA.info(fromAny?d.origin:d.dest).label}));
     return {airline:'Ryanair (live) + other airlines (recent prices, when available)',origins_checked:origins,travellers:(T.adults||1)+(T.children||0),found:best.size,
@@ -129,5 +125,5 @@ async function runTool(name,input){
   throw new Error('Unknown tool '+name);
 }
 
-return {TOOLS,run:runTool,label:toolLabel,today};
+return {TOOLS,run:runTool,today};
 })();

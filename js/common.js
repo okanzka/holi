@@ -106,7 +106,7 @@ const H = {
     return patch;
   },
   alLogo(code,withName){ code=code||'FR'; const n=AIRLINES[code]||code;
-    return `<span class="al" title="${H.esc(n)}"><img src="https://images.kiwi.com/airlines/64/${code}.png" onerror="this.onerror=null;this.src='https://pics.avs.io/64/64/${code}.png'" alt="${H.esc(n)}" loading="lazy">${withName?`<b>${H.esc(n)}</b>`:''}</span>`; },
+    return `<span class="al" title="${H.esc(n)}"><img src="https://pics.avs.io/64/64/${code}.png" alt="${H.esc(n)}" loading="lazy">${withName?`<b>${H.esc(n)}</b>`:''}</span>`; },
   flag(cc){ return /^[A-Za-z]{2}$/.test(cc||'')?`<img class="flag" src="https://flagcdn.com/w40/${cc.toLowerCase()}.png" alt="${cc}" loading="lazy">`:''; },
 };
 
@@ -114,7 +114,8 @@ const H = {
 const AIRLINES={FR:'Ryanair',RK:'Ryanair UK',AL:'Malta Air (Ryanair)',RR:'Buzz (Ryanair)',OE:'Lauda Europe (Ryanair)',
   W6:'Wizz Air',PC:'Pegasus',XQ:'SunExpress',TK:'Turkish Airlines',EW:'Eurowings',LH:'Lufthansa',U2:'easyJet',DE:'Condor',VY:'Vueling',
   VF:'AJet',GQ:'Sky Express',CA:'Air China',W4:'Wizz Air Malta',EI:'Aer Lingus',SK:'SAS',AZ:'ITA Airways',LO:'LOT',OU:'Croatia Airlines',JU:'Air Serbia',FZ:'flydubai',QR:'Qatar Airways',EK:'Emirates',KK:'AtlasGlobal',X3:'TUIfly',BY:'TUI',V7:'Volotea',EN:'Air Dolomiti','4U':'Germanwings',OS:'Austrian',LX:'SWISS',KL:'KLM',AF:'Air France',BA:'British Airways',IB:'Iberia',A3:'Aegean',TP:'TAP Portugal',
-  EY:'Etihad Airways',UX:'Air Europa',SN:'Brussels Airlines',BT:'airBaltic',FB:'Bulgaria Air',RO:'TAROM',SU:'Aeroflot',MS:'EgyptAir',AT:'Royal Air Maroc',ET:'Ethiopian Airlines',SV:'Saudia',G9:'Air Arabia',J2:'Azerbaijan Airlines',PS:'UIA',H4:'HiSky',D8:'Norwegian',DY:'Norwegian',BJ:'Nouvelair',TU:'Tunisair',OR:'TUI'};
+  EY:'Etihad Airways',UX:'Air Europa',SN:'Brussels Airlines',BT:'airBaltic',FB:'Bulgaria Air',RO:'TAROM',SU:'Aeroflot',MS:'EgyptAir',AT:'Royal Air Maroc',ET:'Ethiopian Airlines',SV:'Saudia',G9:'Air Arabia',J2:'Azerbaijan Airlines',PS:'UIA',H4:'HiSky',D8:'Norwegian',DY:'Norwegian',BJ:'Nouvelair',TU:'Tunisair',OR:'TUI',
+  XC:'Corendon',AC:'Air Canada',AY:'Finnair',AA:'American Airlines',KM:'KM Malta Airlines','4Y':'Discover Airlines',ZQ:'German Airways',W9:'Wizz Air UK'};
 
 /* ---------- airport database + search ---------- */
 const AP = (()=>{
@@ -138,7 +139,7 @@ const AP = (()=>{
   }
   const rank={l:0,m:1,s:2};
   return {
-    norm, countryName,
+    norm,
     byCode(c){ build(); return map.get(c); },
     /* bigger airports of a country, large first */
     inCountry(cc,max=30){ build(); return list.filter(a=>a.cc===cc&&a.size!=='s').sort((x,y)=>rank[x.size]-rank[y.size]).slice(0,max); },
@@ -375,9 +376,7 @@ function siteButtons(sites,o){
       <span class="dot" style="background:${s.color}">${s.ab}</span><span>${s.name}<small>Open search ↗</small></span></a>`).join('');
 }
 function openAll(sites,o){
-  let blocked=false;
-  sites.forEach(s=>{ const w=window.open(s.url(o),'_blank','noopener'); if(w===null) blocked=true; });
-  if(blocked) H.toast('Your browser blocked some tabs — allow pop-ups for this page');
+  if(H.openLinks(sites.map(s=>s.url(o)))) H.toast('Your browser blocked some tabs — allow pop-ups for this page');
 }
 
 /* ---------- shared chrome ---------- */
@@ -748,7 +747,7 @@ const TP = {
 const FARES = {
   async perDay(from,to,months,currency,direct,signal){
     const [ry,tp]=await Promise.all([
-      RYANAIR.perDay(from,to,months,currency,signal).then(r=>{ Object.values(r).forEach(v=>{ v.airline='FR'; v.stops=0; v.src='ryanair'; }); return r; }),
+      RYANAIR.perDay(from,to,months,currency,signal).then(r=>{ Object.values(r).forEach(v=>{ v.airline='FR'; v.stops=0; v.src='ryanair'; delete v.alt; }); return r; }),
       TP.available().then(ok=>ok?TP.perDay(from,to,months,currency,direct,signal):{}) ]);
     const out={...tp};
     Object.entries(ry).forEach(([d,v])=>{ const t=out[d]; if(!t||v.price<=t.price){ out[d]=v; if(t&&!H.isRyanair(t)) v.alt=t; } });   // live Ryanair wins ties; the other airline stays as .alt

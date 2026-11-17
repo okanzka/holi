@@ -32,7 +32,7 @@ function combos(){
 }
 
 function render(){
-  $('#title').innerHTML=`Stays in <em>${H.esc(S.city||'…')}</em>`;
+  if(!(location.hash==='#stays'&&STAYS.plan())) $('#title').innerHTML=`Stays in <em>${H.esc(S.city||'…')}</em>`;
   $('#sub').textContent=`${H.nice(H.parse(S.ci))} – ${H.nice(H.parse(S.co))} · ${S.adults} adult${S.adults>1?'s':''}${S.children?' + '+S.children+' child':''} · ${S.rooms} room${S.rooms>1?'s':''}`;
   const T=H.trip();
   if(T.chosen){ $('#sync').style.display=''; $('#sync').innerHTML=`🔗 Synced with your chosen flight: <b>${H.nice(H.parse(T.chosen.ci))} → ${H.nice(H.parse(T.chosen.co))}</b>. <a href="index.html">Change flight</a>`; }
