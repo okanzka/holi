@@ -290,6 +290,9 @@ footer .s{font:700 1.3rem/1.4 var(--font-d);letter-spacing:-.03em;color:#fff}
   .nav ul{gap:0;overflow-x:auto;scrollbar-width:none}
   .nav ul::-webkit-scrollbar{display:none}
   .nav ul a.link{padding:6px 10px;font-size:.82rem;white-space:nowrap}
+  /* only the current page keeps its label, so every page and the theme button fit on screen */
+  .nav ul a.link:not(.active) span{display:none}
+  .nav ul a.link:not(.active){padding:6px 9px}
   .eyebrow{font-size:.85rem}
   .card h2{font-size:1.3rem}
   /* swap button: small, centred, pointing up/down like the stacked fields */
@@ -362,6 +365,7 @@ img.flag{width:22px;height:auto;border-radius:3px;vertical-align:-3px;box-shadow
 .deal .fl img.flag{width:38px;border-radius:5px}
 .ac li small img.flag{width:16px;vertical-align:-2px}
 .deal .acts{max-width:none;flex-wrap:nowrap}
+@media (max-width:560px){.deal .acts{flex-wrap:wrap}}   /* narrow phones: the 🏨 button drops to a new line instead of off the card */
 
 /* ---------- fare calendar (week strip + month grid) ---------- */
 .fare-cal .leg{margin-top:18px}
@@ -490,6 +494,7 @@ html[data-theme="dark"] .cal-sum{box-shadow:0 0 0 1px rgba(255,255,255,.08)}
 .ms-car{color:var(--muted);transition:transform var(--t) var(--spring)}
 .ms.open .ms-car{transform:rotate(180deg)}
 .ms-pop{left:0;min-width:300px;padding:8px}
+@media (max-width:560px){.ms-pop{min-width:0;width:100%}}   /* phone: as wide as the field, never past the card edge */
 .ms-quick{display:flex;gap:6px;padding:4px 4px 8px;border-bottom:.5px solid var(--line);margin-bottom:4px;flex-wrap:wrap}
 .ms-quick button{border:0;background:var(--sand-2);border-radius:999px;padding:5px 11px;font:inherit;font-size:.78rem;font-weight:600;cursor:pointer;color:var(--ink);transition:transform var(--t-fast)}
 .ms-quick button:active{transform:scale(.95)}
@@ -665,4 +670,13 @@ html[data-theme="dark"] .hero.photo{background-color:#000;background-image:var(-
 }
 /* inner pages use the home hero exactly: same photo, same height, same type position */
 .hero.small.photo{min-height:725px;padding-top:144px;box-sizing:border-box}
-@media (max-width:560px){.hero.small.photo{min-height:640px;padding-top:104px}}
+@media (max-width:560px){.hero.small.photo{min-height:440px;padding-top:104px}}   /* phone: the trip card shows on the first screen */
+@media (max-width:380px){.nav ul a.link span{display:none}.nav ul a.link{padding:6px 9px}}
+
+/* ---------- phone: touch sizes and tight spots ---------- */
+@media (max-width:560px){
+  .check{min-height:44px}                       /* the whole row is the tap target */
+  .check input{width:20px;height:20px}
+  .day.low::after{content:"★";letter-spacing:0} /* neighbouring "Lowest" badges no longer overlap */
+  .filters label.f:has(input[data-ac]){flex-basis:100%}  /* a place field gets its own row, so its suggestions fit on screen */
+}
