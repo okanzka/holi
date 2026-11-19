@@ -204,6 +204,9 @@ html[data-theme="dark"] .seg button.on,html[data-theme="dark"] .seg-thumb{backgr
 .pick .meta{color:var(--ink-soft);font-size:.92rem}
 .pick .price{font:700 2rem/1.1 var(--font-d);letter-spacing:-.03em;color:var(--ink);margin:10px 0 2px;font-variant-numeric:tabular-nums}
 .pick .actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+/* three buttons don't fit a card: Book gets its own row, the others share the next one evenly */
+.pick .actions > .btn{flex:1 1 0}
+.pick .actions > .btn.primary{flex-basis:100%}
 .b-great{background:var(--great)}.b-good{background:var(--good)}.b-fair{background:var(--fair)}.b-pricey{background:var(--pricey)}
 
 /* ---------- date matrix ---------- */
@@ -301,6 +304,7 @@ footer .s{font:700 1.3rem/1.4 var(--font-d);letter-spacing:-.03em;color:#fff}
   #tripType{display:grid;grid-template-columns:1fr 1fr;width:100%;border-radius:16px}
   #tripType button,#tripType .seg-thumb{border-radius:13px}
   #tripType button{padding:10px 8px;line-height:1.2}
+  #tripType button:last-of-type:nth-of-type(odd){grid-column:1/-1}   /* an odd last option fills its row */
   /* deal rows: price gets its own line */
   .deal{gap:10px 14px}
   .deal .amt{grid-column:1/-1}
