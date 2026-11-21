@@ -865,9 +865,24 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(qp.get('visa')) patch.visaSel=qp.get('visa').split(',').filter(k=>VISA.ALL.includes(k));
   if(Object.keys(patch).length) H.setTrip(patch);
   const f=$('#f'); T=H.trip(); flex=T.flex; tripType=T.tripType;
-  setAirport(f.from,T.from); setAirport(f.to,T.to);
-  f.start.value=T.start; f.end.value=T.end; f.adults.value=T.adults; f.children.value=T.children; f.cabin.value=T.cabin;
-  f.currency.value=T.currency; f.minNights.value=T.minNights||''; f.budget.value=T.budget||''; f.nearby.checked=!!T.nearby; f.direct.checked=!!T.direct;
+  /* put the current search into the form: on load, and when a tab brings back its own search */
+  const put=(el,code)=>{ if(code) setAirport(el,code); else { el.value=''; el.dataset.code=''; el.dataset.label=''; } };
+  function fillForm(){
+    T=H.trip(); flex=T.flex;
+    put(f.from,T.from); put(f.to,T.to);
+    f.start.value=T.start; f.end.value=T.end; f.adults.value=T.adults; f.children.value=T.children; f.cabin.value=T.cabin;
+    f.currency.value=T.currency; f.minNights.value=T.minNights||''; f.budget.value=T.budget||''; f.nearby.checked=!!T.nearby; f.direct.checked=!!T.direct;
+    put($('#viaMid'),T.viaMid||'ANY'); put($('#viaLast'),T.viaLast); put($('#viaEnd'),T.viaEnd); put($('#meetFrom'),T.meetFrom);
+    $('#mcStops').value=T.mcStops||1; $('#mcCities').value=T.mcCities||2; $('#mcMin').value=T.mcMin||3; $('#mcMax').value=T.mcMax||5; put($('#mcMust'),T.mcMust);
+    renderLegRows(T.legs&&T.legs.length?T.legs:[{from:T.from!=='ANY'?T.from:''},{}]); $('#legGap').value=T.legGap==null?1:T.legGap;
+  }
+  fillForm();
+  /* what the form holds now, searched or not, so a tab switch keeps unsent edits too */
+  const codeIf=el=>el.value.trim()?H.codeOf(el)||null:null, noAny=c=>c==='ANY'?null:c;
+  const formSnap=()=>({from:codeIf(f.from)||T.from,to:codeIf(f.to)||'ANY',start:f.start.value||T.start,end:f.end.value||T.end,flex,
+    nearby:f.nearby.checked,direct:f.direct.checked,minNights:+f.minNights.value||0,budget:Math.max(0,+f.budget.value||0),
+    viaMid:noAny(codeIf($('#viaMid'))),viaLast:noAny(codeIf($('#viaLast'))),viaEnd:noAny(codeIf($('#viaEnd'))),meetFrom:noAny(codeIf($('#meetFrom'))),
+    legs:readLegRows().filter(l=>l.from&&l.to).map(({from,to,day})=>({from,to,day})),legGap:(g=>Number.isFinite(g)?g:1)(parseInt($('#legGap').value,10))});
   const pills=[...document.querySelectorAll('#flexPills button')], segs=[...document.querySelectorAll('#tripType button')];
   const paint=()=>{ pills.forEach(b=>b.classList.toggle('on',+b.dataset.v===flex)); segs.forEach(b=>b.classList.toggle('on',b.dataset.v===tripType));
     $('#endWrap').style.display=tripType==='ow'?'none':'';
@@ -894,7 +909,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     else { f.from.closest('label').style.display=''; f.minNights.closest('label').style.display=''; }
     if(meetOn){ $('#swap').style.display='none'; $('#endWrap').style.display=''; f.nearby.closest('label').style.visibility='hidden'; f.budget.closest('label').style.display='none'; } };
   pills.forEach(b=>b.onclick=()=>{flex=+b.dataset.v;paint();submit();});
-  segs.forEach(b=>b.onclick=()=>{tripType=b.dataset.v;paint();submit();});
+  // each tab keeps its own search: remember the one on screen, bring back the next tab's (or its defaults)
+  segs.forEach(b=>b.onclick=()=>{ if(b.dataset.v===tripType) return;
+    TABS.save(tripType,{...H.trip(),...formSnap()}); tripType=b.dataset.v; H.setTrip({...TABS.patch(tripType),tripType});
+    fillForm(); paint(); selected=null; $('#detail').classList.remove('show'); render(); });
   paint();
   $('#swap').onclick=()=>{ const a=H.codeOf(f.from), b=H.codeOf(f.to);
     setAirport(f.from,b); setAirport(f.to,a); submit(); };
@@ -962,16 +980,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('#calView button').forEach(b=>b.onclick=()=>{ cal.view=b.dataset.v; H.save('calView',cal.view);
     cal.outMonth=T.start.slice(0,7); cal.backMonth=T.end.slice(0,7); renderCal(); });
   // multi-city controls
-  setAirport($('#viaMid'),T.viaMid||'ANY');
-  if(T.viaEnd) setAirport($('#viaEnd'),T.viaEnd);
-  if(T.meetFrom) setAirport($('#meetFrom'),T.meetFrom);
-  renderLegRows(T.legs&&T.legs.length?T.legs:[{from:T.from!=='ANY'?T.from:''},{}]); $('#legGap').value=T.legGap==null?1:T.legGap;
   $('#legAdd').onclick=()=>{ const cur=readLegRows(), last=cur[cur.length-1]; if(cur.length>=8){ H.toast('Up to 8 flights'); return; }
     renderLegRows([...cur,{from:last&&last.to||''}]); const ins=document.querySelectorAll('#legRows .leg-row:last-child input'); (ins[0].value?ins[1]:ins[0]).focus(); };
   $('#meetFrom').addEventListener('change',()=>{ if(tripType==='meet'&&$('#meetFrom').value.trim()) submit(); });
   ['#meetQ','#meetGap','#meetMax'].forEach(s=>$(s).addEventListener('input',()=>{ if(!meet.loading&&meet.res) renderMeetList(); }));
-  if(!T.viaLast&&T.to&&T.to!=='ANY'&&T.to!==T.from) H.setTrip({viaLast:T.to}); if(H.trip().viaLast) setAirport($('#viaLast'),H.trip().viaLast);
-  $('#mcStops').value=T.mcStops||1; $('#mcCities').value=T.mcCities||2; $('#mcMin').value=T.mcMin||3; $('#mcMax').value=T.mcMax||5; if(T.mcMust) setAirport($('#mcMust'),T.mcMust);
   $('#mcGo').onclick=()=>{ const mn=Math.max(1,+$('#mcMin').value||3), mx=Math.max(mn,+$('#mcMax').value||mn);
     $('#mcMin').value=mn; $('#mcMax').value=mx;
     const vm=$('#viaMid').value.trim()?H.codeOf($('#viaMid')):'ANY', vl=$('#viaLast').value.trim()?H.codeOf($('#viaLast')):'';

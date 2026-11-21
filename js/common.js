@@ -756,6 +756,22 @@ const FARES = {
   },
 };
 
+/* ---------- flights page: each tab (trip type) keeps its own search; people, cabin, currency and filters stay shared ---------- */
+const TABS = {
+  KEYS:['from','to','city','start','end','flex','nearby','minNights','budget','direct','viaMid','viaLast','viaEnd',
+    'mcStops','mcCities','mcMin','mcMax','mcMust','meetFrom','legs','legGap'],
+  save(tab,t){ const all=H.load('tabs',{}); all[tab]=Object.fromEntries(TABS.KEYS.filter(k=>k in t).map(k=>[k,t[k]])); H.save('tabs',all); },
+  /* the saved search of a tab, or the defaults for a tab never used. Dates that have passed move to a week from today. */
+  patch(tab){
+    const today=new Date(); today.setHours(0,0,0,0);
+    const p={from:'NUE',to:'ANY',city:'',start:H.fmt(H.add(today,30)),end:H.fmt(H.add(today,37)),flex:2,nearby:true,minNights:0,budget:0,direct:false,
+      viaMid:null,viaLast:null,viaEnd:null,mcMust:null,meetFrom:null,legs:[],legGap:1,...(H.load('tabs',{})[tab]||{})};
+    if(H.parse(p.start)<today){ const len=Math.max(1,H.diff(H.parse(p.start),H.parse(p.end)||H.parse(p.start)));
+      p.start=H.fmt(H.add(today,7)); p.end=H.fmt(H.add(today,7+len)); }
+    return p;
+  },
+};
+
 /* ---------- meet-up: two people from two home cities meet in one place, then each flies home ----------
    Same arrival and same return days come first; then one of them landing or leaving up to `flex` days apart. */
 const MEET = {
