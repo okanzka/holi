@@ -126,6 +126,11 @@ const STAYS = {
     }
     return list;
   },
+  /* hotels page: every kind of place, cheapest first; a max per night drops the priced places above it */
+  live(props,nights,budget){
+    const max=+budget||0;
+    return this.pick(props,'both',nights,24).filter(p=>!max||p.noPrice||(p.night||p.tot/nights)<=max);
+  },
   links(c,adults){
     const q=encodeURIComponent(c.city);
     return [
@@ -157,7 +162,7 @@ function renderStayWizard(box){
   if(step<n){
     const c=P.cities[step], kind=P.kind||'both';
     body=`<div class="st-head"><div><h3>Where to stay in ${H.flag(c.cc)} ${H.esc(c.city)}</h3>
-        <p class="sub" style="margin:0">${H.nice(H.parse(c.ci))} → ${H.nice(H.parse(c.co))} · ${c.nights} night${c.nights>1?'s':''} · ${P.adults} adult${P.adults>1?'s':''}${P.children?` + ${P.children} child`:''}</p></div>
+        <p class="sub" style="margin:0">${H.nice(H.parse(c.ci))} → ${H.nice(H.parse(c.co))} · ${c.nights} night${c.nights>1?'s':''}${typeof WX!=='undefined'?' '+WX.badge({dest:c.code,dep:c.ci,ret:c.co}):''} · ${P.adults} adult${P.adults>1?'s':''}${P.children?` + ${P.children} child`:''}</p></div>
         <div class="seg" id="stKind"><button type="button" data-k="both" class="${kind==='both'?'on':''}">Both</button><button type="button" data-k="hostel" class="${kind==='hostel'?'on':''}">Hostels</button><button type="button" data-k="hotel" class="${kind==='hotel'?'on':''}">Hotels</button></div></div>
       <div class="st-map hidden" id="stMap"></div>
       <div class="st-grid" id="stGrid"><div class="loading" style="grid-column:1/-1">Looking for places to stay in ${H.esc(c.city)}…</div></div>
@@ -190,6 +195,7 @@ function renderStayWizard(box){
   box.innerHTML=`<div class="row"><h2 style="margin:0"><span class="ico">🧳</span>Stay planner</h2><span class="spacer"></span>
       <span class="hint">${H.esc(P.label)}</span><button class="btn ghost sm" id="stClear">✕ Clear plan</button></div>
     <div class="st-steps">${stepChips}</div>${body}`;
+  if(step<n&&typeof WX!=='undefined'){ const c=P.cities[step]; WX.fill(box,[{dest:c.code,dep:c.ci,ret:c.co}]); }
 
   // events
   const go=i=>{ const p=STAYS.plan(); p.step=i; STAYS.save(p); renderStayWizard(box); box.scrollIntoView({behavior:'smooth',block:'start'}); };

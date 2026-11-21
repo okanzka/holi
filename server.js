@@ -31,7 +31,7 @@ const cache = new Map();            // url -> {t, status, body}
 const CACHE_MS = 10 * 60 * 1000;
 
 const TYPES = { '.html':'text/html; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.css':'text/css; charset=utf-8',
-  '.json':'application/json', '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.webp':'image/webp', '.svg':'image/svg+xml', '.ico':'image/x-icon' };
+  '.json':'application/json', '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.webp':'image/webp', '.svg':'image/svg+xml', '.ico':'image/x-icon', '.webmanifest':'application/manifest+json' };
 
 /* pages opened as a file (Origin: null) or in Streamlit on this computer (http://localhost:<port>) may read the answers */
 const corsOrigin = o => (o === 'null' || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o || '')) ? o : null;
@@ -238,9 +238,9 @@ function resolveFile(pathname){
   try { p = decodeURIComponent(pathname); } catch (e) { return null; }      // malformed, e.g. "/%"
   if (p === '/') p = '/index.html';
   const file = path.normalize(path.join(ROOT, p));
-  // only the site itself: the pages in the root, and the css, js and image folders
+  // only the site itself: the pages in the root, and the css, js, image and app-icon folders
   const rel = path.relative(ROOT, file).split(path.sep).join('/');
-  if (!/^[\w-]+\.html$|^(css|js|background-image)\/[^/]+$/i.test(rel)) return null;
+  if (!/^[\w-]+\.html$|^(css|js|background-image|icons)\/[^/]+$/i.test(rel)) return null;
   return file;
 }
 function serveFile(res, url){

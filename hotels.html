@@ -8,6 +8,12 @@
 <script>try{if(localStorage.getItem('heybe.theme')==='dark'){document.documentElement.dataset.theme='dark';document.querySelector('meta[name=theme-color]').content='#000000';}}catch(e){}</script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏝️</text></svg>">
+<link rel="manifest" href="icons/manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Heybe">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>
   .stars button{min-width:62px}
   .stay-pill{display:inline-block;font-size:.72rem;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--y-bg);color:var(--y-fg);margin-left:6px}
@@ -52,6 +58,12 @@
   </section>
 
   <section class="card">
+    <h2><span class="ico">🏨</span>Places with prices</h2>
+    <p class="sub" id="liveSub">Live prices for your exact dates. Type any city above and press Find stays.</p>
+    <div class="list" id="live"></div>
+  </section>
+
+  <section class="card">
     <h2><span class="ico">🗓️</span>Stay options</h2>
     <p class="sub">Each square is a check-in/check-out pair. Weekend nights (Fri & Sat) usually cost more in cities, and the colours reflect that. Click a square to search it.</p>
     <div class="matrix-wrap"><table class="matrix" id="matrix"></table></div>
@@ -86,6 +98,7 @@
 
 <script src="js/airports.js"></script>
 <script src="js/common.js"></script>
+<script src="js/weather.js"></script>
 <script src="js/stays.js"></script>
 <script src="js/hotels.js"></script>
 <script>

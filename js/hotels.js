@@ -73,6 +73,41 @@ function showDetail(c){
   $('#detail').classList.add('show');
 }
 
+/* live places for the exact dates, from the same hotel search the stay planner uses */
+const live={key:'',list:null,loading:false,error:''};
+async function liveSearch(){
+  if(!S.city||S.co<=S.ci){ live.key=''; renderLive(); return; }
+  const key=[S.city.toLowerCase(),S.ci,S.co,S.adults].join('|'); if(key===live.key&&(live.list||live.loading)) return renderLive();
+  Object.assign(live,{key,list:null,loading:true,error:''}); renderLive();
+  let list=null, error='';
+  try{ if(!(await STAYS.available())) throw new Error('Hotel search needs the local server (start.bat)');
+    list=await STAYS.search({city:S.city,ci:S.ci,co:S.co},Math.min(9,S.adults||1),H.trip().currency); }
+  catch(e){ error=e.message||'Hotel search failed'; }
+  if(live.key!==key) return;                                            // a newer search started meanwhile
+  Object.assign(live,{list,error,loading:false}); renderLive();
+}
+function renderLive(){
+  const box=$('#live'), n=H.diff(H.parse(S.ci),H.parse(S.co)), cur=H.trip().currency;
+  if(!live.key){ box.innerHTML=''; return; }
+  $('#liveSub').textContent=`${S.city} · ${H.nice(H.parse(S.ci))} – ${H.nice(H.parse(S.co))} (${n} night${n>1?'s':''})${S.budget?` · up to ${H.money(+S.budget,cur)} / night`:''}`;
+  if(live.loading){ box.innerHTML='<div class="loading">Checking hotels and hostels… this can take up to a minute.</div>'; return; }
+  if(live.error){ box.innerHTML=`<div class="empty">${H.esc(live.error)}. Use the sites in "Stay options" below instead.</div>`; return; }
+  const L=STAYS.live(live.list,n,S.budget);
+  if(!L.length){ box.innerHTML=`<div class="empty">No places found for ${H.esc(S.city)} on these dates${S.budget?' within your budget':''}. Try another spelling, other dates, or the sites below.</div>`; return; }
+  box.innerHTML=L.map((p,i)=>{ const link=/^https?:\/\//i.test(p.link||'')?p.link:'';
+    return `<div class="item"><div>
+      <div class="t">${p.hostel?'🛏️':'🏨'} ${H.esc(p.name)}${p.rating?`<span class="stay-pill">⭐ ${p.rating}</span>`:''}</div>
+      <div class="s">${H.esc(p.type||'Hotel')}${p.source?' · cheapest on '+H.esc(p.source):''}</div></div>
+      <div class="row">${p.noPrice?'<div class="hint">no price for these dates</div>':`<div><div class="amt">${H.money(p.tot/n,cur)}<span class="hint"> /night</span></div><div class="hint" style="text-align:right">${H.money(p.tot,cur)} total</div></div>`}
+      ${link?`<a class="btn ghost sm" href="${H.esc(link)}" target="_blank" rel="noopener">View ↗</a>`:''}
+      ${p.noPrice?'':`<button class="btn primary sm" data-live="${i}">♡ Save</button>`}</div></div>`; }).join('');
+  box.querySelectorAll('[data-live]').forEach(b=>b.onclick=()=>{ const p=L[+b.dataset.live];
+    const SL=H.load('shortlist',[]);
+    SL.push({id:Date.now(),city:S.city,name:p.name,site:p.source||'Live price',price:Math.round(p.tot),rating:p.rating?Math.min(10,+(p.rating*2).toFixed(1)):null,
+      area:'',link:/^https?:\/\//i.test(p.link||'')?p.link:'',ci:S.ci,co:S.co,nights:n,cur});
+    H.save('shortlist',SL); H.toast('Added to shortlist 💖'); renderShortlist(); b.disabled=true; b.textContent='Saved ✓'; });
+}
+
 function renderShortlist(){
   const by=$('#sortBy').value;
   const L=H.load('shortlist',[]).filter(h=>h.city.toLowerCase()===String(S.city).toLowerCase());
@@ -114,8 +149,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   f.onsubmit=e=>{ e.preventDefault();
     if(f.co.value<=f.ci.value){ H.toast('Check-out must be after check-in'); return; }
     Object.assign(S,{city:f.city.value.trim(),ci:f.ci.value,co:f.co.value,adults:+f.adults.value||1,children:+f.children.value||0,rooms:+f.rooms.value||1,budget:f.budget.value});
-    save(); selected=null; render(); };
+    save(); selected=null; render(); liveSearch(); };
   $('#sortBy').onchange=renderShortlist;
-  render();
+  render(); liveSearch();
 });
 })();

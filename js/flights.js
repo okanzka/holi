@@ -167,7 +167,7 @@ function renderAnywhere(){
       <div class="meta">${H.esc(d.pCountry)} · ${d.origin} → ${d.dest}</div>
       <div style="margin-top:6px">${VISA.badge(d.pCode)}</div>
       <div class="price">${H.money(d.pp,d.cur)}<span class="hint"> / person</span></div>
-      <div class="meta">${H.nice(H.parse(d.dep))} ${H.time(d.outDep)}${d.ret?` → ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} · ${d.nights} nights`:''}</div>
+      <div class="meta">${H.nice(H.parse(d.dep))} ${H.time(d.outDep)}${d.ret?` → ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} · ${d.nights} nights`:''} ${WX.badge(d)}</div>
       <div class="meta">${alLogos(d)} <span class="fn">${H.esc([d.outFlight,d.inFlight].filter(Boolean).join(' / '))}</span> ${stopTag(d)}</div>
       ${altLine(d)}
       ${budgetOn()?stayLine(d):`<div class="meta">≈ ${H.money(d.total,d.cur)} for ${pax()} traveller${pax()>1?'s':''}</div>`}
@@ -177,6 +177,7 @@ function renderAnywhere(){
         <button class="btn ghost sm" data-hotel="${d.key}">🏨 Stays</button></div></div>`).join('');
   renderDealList();
   bindDealButtons($('#anyPicks'));
+  WX.fill($('#anyPicks'),picks);
   fillStays(cand);
 }
 
@@ -246,7 +247,7 @@ function renderDealList(){
   $('#deals').innerHTML=L.map(d=>`<div class="deal">
       <span class="fl">${H.flag(d.cc)||'✈️'}</span>
       <div><div class="t">${H.esc(d.pCity)}<small>${H.esc(d.pCountry)} · ${d.pCode}</small>${d.tag?`<span class="from-tag">${d.tag}</span>`:''} ${VISA.badge(d.pCode)}</div>
-        <div class="s">${alLogos(d)} ${stopTag(d)} 🛫 ${H.nice(H.parse(d.dep))} ${H.time(d.outDep)} <span class="fn">${H.esc(d.outFlight||'')}</span>${d.ret?` &nbsp;🛬 ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} <span class="fn">${H.esc(d.inFlight||'')}</span> · ${d.nights} nights`:' · one way'}</div>${altLine(d)}</div>
+        <div class="s">${alLogos(d)} ${stopTag(d)} 🛫 ${H.nice(H.parse(d.dep))} ${H.time(d.outDep)} <span class="fn">${H.esc(d.outFlight||'')}</span>${d.ret?` &nbsp;🛬 ${H.nice(H.parse(d.ret))} ${H.time(d.inDep)} <span class="fn">${H.esc(d.inFlight||'')}</span> · ${d.nights} nights`:' · one way'} ${WX.badge(d)}</div>${altLine(d)}</div>
       <div class="amt">${H.money(d.pp,d.cur)}<small>per person · ${budgetOn()?`≈ ${H.money(d.tripTotal,d.cur)} with ${d.stayTotal!=null?`stay${d.stay.src==='est'?' (est.)':''}`:'flights only'}`:`≈ ${H.money(d.total,d.cur)} total`}</small></div>
       <div class="acts">
         <a class="btn primary sm" target="_blank" rel="noopener" href="${H.esc(dealBook(d))}">Book ↗</a>
@@ -254,6 +255,7 @@ function renderDealList(){
         <button class="btn ghost sm" data-route="${d.dest}" data-origin="${d.origin}" title="See every date combination">📅</button>
         <button class="btn ghost sm" data-hotel="${d.key}" title="Plan where to stay on these dates">🏨</button></div></div>`).join('');
   bindDealButtons($('#deals'));
+  WX.fill($('#deals'),L);
 }
 
 function bindDealButtons(root){
@@ -403,7 +405,8 @@ function liveSetup(c){
 function select(c){ selected={ds:c.ds,rs:c.rs}; renderRoute(); $('#detail').scrollIntoView({behavior:'smooth',block:'start'}); }
 function showDetail(c,hasLive){
   const o=opts(c.ds,c.rs), sites=hasLive?[RY_SITE,...FLIGHT_SITES]:FLIGHT_SITES;
-  $('#dTitle').innerHTML=`✈️ ${H.nice(c.dep)}${c.ret?' → '+H.nice(c.ret):''}`;
+  const wx={dest:T.to,dep:c.ds,ret:c.rs};
+  $('#dTitle').innerHTML=`✈️ ${H.nice(c.dep)}${c.ret?' → '+H.nice(c.ret):''} ${WX.badge(wx)}`; WX.fill($('#dTitle'),[wx]);
   $('#dSub').textContent=`${T.from} → ${T.to}${c.ret?' · '+c.nights+' nights':''} · ${shiftText(c)}`+
     (c.liveTotal!=null?` · live fare: ${H.money(c.livePP,c.liveCur)} pp, ≈ ${H.money(c.liveTotal,c.liveCur)} total`:` · estimate: ${TIER_LABEL[tier(c.score)].toLowerCase()}`);
   $('#dSites').innerHTML=siteButtons(sites,o); liveSetup(c);
@@ -466,7 +469,9 @@ const legLine=(l,i)=>`<div class="mc-leg"><span class="n">${i+1}</span><span>${H
   <a target="_blank" rel="noopener" title="Book this flight" href="${H.esc(legBook(l))}">Book ↗</a></div>`;
 /* multi-city trips under the Airlines menu (Without Ryanair / ticked airlines) */
 const mcTrips=()=>mc.res?mc.res.itineraries.map(it=>H.filterTrip(it,{noRyanair,sel:any.alSel})).filter(Boolean):[];
-const chain=it=>`<div class="chain"><span>${it.legs[0].from}</span><i>✈</i>${it.stops.map((s,i)=>`<span>${H.flag((AP.byCode(it.legs[i].to)||{}).cc)} ${H.esc(s)} <small>${it.nights[i]}n</small> <span title="${H.esc(VISA.info(it.legs[i].to).label)}">${VISA.info(it.legs[i].to).icon}</span></span><i>✈</i>`).join('')}<span>${it.legs[it.legs.length-1].to}</span></div>`;
+/* the stays of a multi-city trip as {dest, dep, ret} for the weather badges (arrival day -> next flight's day) */
+const mcStops=it=>it.legs.slice(0,-1).map((l,i)=>({dest:l.to,dep:String(l.arr||l.dep).slice(0,10),ret:String(it.legs[i+1].dep).slice(0,10)}));
+const chain=it=>`<div class="chain"><span>${it.legs[0].from}</span><i>✈</i>${it.stops.map((s,i)=>`<span>${H.flag((AP.byCode(it.legs[i].to)||{}).cc)} ${H.esc(s)} <small>${it.nights[i]}n</small> ${WX.badge(mcStops(it)[i]||{})} <span title="${H.esc(VISA.info(it.legs[i].to).label)}">${VISA.info(it.legs[i].to).icon}</span></span><i>✈</i>`).join('')}<span>${it.legs[it.legs.length-1].to}</span></div>`;
 const nightsOf=it=>it.nights.reduce((a,b)=>a+b,0);
 const mcVisaOk=it=>it.legs.slice(0,-1).every(l=>VISA.pass(l.to));
 
@@ -505,7 +510,7 @@ function renderMulti(){
       <div class="meta">≈ ${priceFmt(it.total*pax(),it.cur)} for ${pax()} traveller${pax()>1?'s':''} · ${nightsOf(it)} nights · ${H.short(H.parse(it.start))} – ${H.short(H.parse(it.end))}</div>
       <div class="mc-legs">${it.legs.map(legLine).join('')}</div>
       <div class="actions"><button class="btn primary sm" data-mcstay="p${i}">🏨 Plan stays</button></div></div>`).join('');
-  mcShown.p=picks; bindMcStays($('#mcPicks'));
+  mcShown.p=picks; bindMcStays($('#mcPicks')); WX.fill($('#mcPicks'),picks.flatMap(mcStops));
   renderMcList(L);
 }
 function renderMcList(L){
@@ -515,7 +520,7 @@ function renderMcList(L){
       <div style="grid-column:1/3">${chain(it)}<div class="mc-legs compact">${it.legs.map(legLine).join('')}</div></div>
       <div class="amt">${priceFmt(it.total,it.cur)}<small>per person · ${nightsOf(it)} nights<br>≈ ${priceFmt(it.total*pax(),it.cur)} total</small>
         <button class="btn ghost sm" style="margin-top:6px" data-mcstay="l${i}">🏨 Stays</button></div></div>`).join('');
-  mcShown.l=L; bindMcStays($('#mcList'));
+  mcShown.l=L; bindMcStays($('#mcList')); WX.fill($('#mcList'),L.slice(0,60).flatMap(mcStops));
 }
 const mcShown={p:[],l:[]};
 function bindMcStays(root){ root.querySelectorAll('[data-mcstay]').forEach(b=>b.onclick=()=>{
@@ -648,6 +653,7 @@ function renderCal(){
     <div class="it" style="flex-direction:row;align-items:center;gap:8px">${sumAl.map(x=>H.alLogo(x)).join('')}<div class="it"><small>Airline</small><b>${H.esc(sumAl.map(x=>AIRLINES[x]||x).join(' + ')||'—')}</b></div></div>
     <div class="it"><small>Departure</small><b>${H.nice(H.parse(T.start))}${okO?' · '+H.time(o.dep):''}</b></div>
     ${rt?`<div class="it"><small>Return</small><b>${H.nice(H.parse(T.end))}${b&&b.state==='ok'?' · '+H.time(b.dep):''}</b></div><div class="it"><small>Stay</small><b>${nights} night${nights>1?'s':''}</b></div>`:''}
+    <div class="it wx-it"><small>Weather</small><b>${WX.badge({dest:T.to,dep:T.start,ret:rt?T.end:null})}</b></div>
     <div class="it"><small>${pp!=null?`Per person ${priceFmt(pp,cur)}`:'Lowest price'}</small>
       <span class="tot">${pp!=null?priceFmt(pp*pax(),cur):loading?'…':'—'}</span>
       <small style="opacity:.8;text-transform:none;letter-spacing:0">${pp!=null?`total for ${pax()} traveller${pax()>1?'s':''}`:loading?'loading prices':'no fare found that day; compare on other sites →'}</small></div>
@@ -657,6 +663,7 @@ function renderCal(){
       <a class="btn ghost sm" target="_blank" rel="noopener" href="${H.esc(FLIGHT_SITES[1].url(q))}">Skyscanner ↗</a>
       ${rt?'<button class="btn ghost sm" id="calStays">🏨 Stays</button>':''}
     </div>`;
+  WX.fill($('#calSum'),[{dest:T.to,dep:T.start,ret:rt?T.end:null}]);
   const cs=$('#calStays'); if(cs) cs.onclick=()=>STAYS.start({cities:[STAYS.city(T.to,(okO&&o.arr?String(o.arr):T.start).slice(0,10),T.end)],flightPP:pp,cur,label:`${T.from} → ${H.cityOf(T.to)}`,
     flights:pp!=null&&allRyan?[{from:T.from,to:T.to,dep:T.start,ret:T.end,url:RYANAIR.bookUrl(q)}]
       :[[o,T.from,T.to,T.start],[b,T.to,T.from,T.end]].map(([x,f,t,d])=>({from:f,to:t,dep:d,url:x&&x.state==='ok'&&x.src==='ryanair'?RYANAIR.bookUrl({from:f,to:t,dep:d,ret:null,adults:T.adults,children:T.children})

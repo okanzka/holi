@@ -515,6 +515,11 @@ html[data-theme="dark"] .cal-sum{box-shadow:0 0 0 1px rgba(255,255,255,.08)}
 .cal-sum .al b{color:#fff}
 .cal-sum .al img{width:34px;height:34px;border-radius:9px}
 .fn{font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:.01em}
+.wx{display:inline-block;white-space:nowrap;font-weight:600;color:var(--ink)}
+.wx:empty{display:none}
+.wx small{font-size:.7rem;font-weight:500;color:var(--muted)}
+.wx-it:has(.wx:empty),.wx-it:not(:has(.wx)){display:none}
+.cal-sum .wx,.cal-sum .wx small{color:inherit}
 
 /* ---------- stops + airline in calendar days ---------- */
 .stop-tag{display:inline-block;font-size:.68rem;font-weight:700;border-radius:6px;padding:1px 6px;background:var(--y-bg);color:var(--y-fg);vertical-align:middle}
