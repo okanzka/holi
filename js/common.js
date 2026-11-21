@@ -903,6 +903,18 @@ const FLIX = {
         fromSt:(st[x.departure.station_id]||{}).name||'',toSt:(st[x.arrival.station_id]||{}).name||'',url:FLIX.bookUrl(q)}))
       .sort((a,b)=>a.price-b.price);
   },
+  /* the popular places reachable from a city, with FlixBus's usual price range: {id, name, country, min, avg, mins, train} */
+  async reachable(id,currency,signal){
+    const r=await NET.json(`${this.base}/cms/cities/${id}/reachable?`+new URLSearchParams({language:'en',country:'de'}),{signal},15000);
+    if(!r.ok) throw new Error('FlixBus '+r.status);
+    return FLIX.parseReachable(r.data,currency);
+  },
+  parseReachable(d,currency){
+    const cur=currency||'EUR';
+    return ((d&&d.result)||[]).filter(c=>c&&c.uuid&&c.price).map(c=>{ const p=c.price[cur]||c.price.EUR||Object.values(c.price)[0]||{};
+      return {id:c.uuid,name:c.name,country:c.country,min:p.min,avg:p.avg,cur:c.price[cur]?cur:'EUR',mins:Math.round(c.min_duration||0),
+        train:(c.transportation_category||[]).includes('train'),bus:(c.transportation_category||[]).includes('bus')}; }).filter(c=>c.min!=null);
+  },
   bookUrl(q){ return 'https://shop.flixbus.com/search?'+new URLSearchParams({departureCity:q.from,arrivalCity:q.to,rideDate:dmy(q.date),adult:q.adults||1,_locale:'en'}); },
 };
 const TRANSIT = {
@@ -913,7 +925,7 @@ const TRANSIT = {
     const r=await NET.json(`${this.base}/geocode?`+new URLSearchParams({text:q.trim()}),{signal},10000);
     const seen=new Set();
     return (r.ok&&Array.isArray(r.data)?r.data:[]).filter(p=>p.type==='STOP'||p.type==='PLACE')
-      .map(p=>({name:p.name,lat:p.lat,lon:p.lon,tz:p.tz||'',country:p.country||''}))
+      .map(p=>({name:p.name,lat:p.lat,lon:p.lon,tz:p.tz||'',country:p.country||'',kind:p.type==='STOP'?'Station':'Town'}))
       .filter(p=>{ const k=p.name+'|'+p.country; if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,8);
   },
   /* trains leaving after `time` (ISO); cursor: the `next` of an earlier answer, for later trains */
@@ -938,20 +950,43 @@ const TRANSIT = {
     return l.url;
   },
 };
-/* a text box that suggests places while typing (bus and train pages). finder(q, signal) → [{name, country, …}].
-   get() gives the picked place, or the best match for what was typed. */
-function placeBox(input,finder){
-  const label=p=>p.name+(p.country?', '+p.country:'');
-  const dl=document.createElement('datalist'); dl.id=input.id+'List'; input.setAttribute('list',dl.id); input.after(dl);
-  let opts=[], timer=null, ctl=null;
-  input.addEventListener('input',()=>{
-    const hit=opts.find(p=>label(p)===input.value); input.place=hit||null; if(hit) return;
-    clearTimeout(timer); timer=setTimeout(async()=>{ if(ctl) ctl.abort(); ctl=new AbortController();
-      try{ opts=await finder(input.value,ctl.signal); dl.innerHTML=opts.map(p=>`<option value="${H.esc(label(p))}">`).join('');
-        const h=opts.find(p=>label(p)===input.value); if(h) input.place=h; }catch(e){} },250); });
+/* a text box with a list of places while typing, like the airport boxes (bus and train pages).
+   finder(q, signal) → [{name, country (2-letter code), kind?}]. o.anywhere: offer 🌍 Anywhere first.
+   get() gives the picked place ({any:true} for Anywhere), or the best match for what was typed. */
+const countryName=cc=>{ try{ return new Intl.DisplayNames(['en'],{type:'region'}).of(String(cc).toUpperCase())||cc; }catch(e){ return cc||''; } };
+function placeBox(input,finder,o={}){
+  const ANY={any:true,name:'Anywhere'};
+  const label=p=>p.any?'🌍 Anywhere':p.name+(p.country?', '+countryName(p.country):'');
+  const wrap=document.createElement('div'); wrap.className='ac-wrap'; input.parentNode.insertBefore(wrap,input); wrap.appendChild(input);
+  const ul=document.createElement('ul'); ul.className='ac'; wrap.appendChild(ul);
+  input.setAttribute('autocomplete','off');
+  let items=[], idx=-1, timer=null, ctl=null;
+  const isAny=v=>o.anywhere&&/^(🌍\s*)?(anywhere|her ?yer)$/i.test(v.trim());
+  function draw(q){
+    const list=(o.anywhere&&(!q||/^(a|an|any|her)/i.test(q.trim()))?[ANY]:[]).concat(items);
+    if(!list.length){ ul.innerHTML=`<li class="none">${q?'No match — try another spelling':'Type a city…'}</li>`; ul.classList.add('open'); return; }
+    ul.innerHTML=list.map((p,i)=>p.any?`<li data-i="${i}" class="any"><span class="cd">🌍</span><span><b>Anywhere</b><small>${H.esc(o.anywhere)}</small></span></li>`
+      :`<li data-i="${i}"><span class="cd">${H.flag(p.country)||'📍'}</span><span><b>${H.esc(p.name)}</b><small>${H.esc(countryName(p.country))}${p.kind?' · '+H.esc(p.kind):''}</small></span></li>`).join('');
+    ul._list=list; idx=-1; ul.classList.add('open');
+  }
+  function pick(i){ const p=ul._list&&ul._list[i]; if(!p) return; input.place=p; input.value=label(p); ul.classList.remove('open'); input.dispatchEvent(new Event('change',{bubbles:true})); }
+  function find(){ const q=input.value===input.dataset.label?'':input.value; input.place=null;
+    draw(q); clearTimeout(timer); if(!q||q.trim().length<2||isAny(q)) return;
+    timer=setTimeout(async()=>{ if(ctl) ctl.abort(); ctl=new AbortController();
+      try{ items=await finder(q,ctl.signal); if(document.activeElement===input) draw(q); }catch(e){} },220); }
+  input.addEventListener('focus',()=>{ input.dataset.label=input.value; input.select(); items=[]; draw(''); });
+  input.addEventListener('input',find);
+  input.addEventListener('keydown',e=>{ if(!ul.classList.contains('open')) return; const lis=ul.querySelectorAll('li[data-i]');
+    if(e.key==='ArrowDown'){ idx=Math.min(idx+1,lis.length-1); e.preventDefault(); }
+    else if(e.key==='ArrowUp'){ idx=Math.max(idx-1,0); e.preventDefault(); }
+    else if(e.key==='Enter'){ if(lis.length&&(idx>=0||!input.place)){ pick(idx<0?0:idx); e.preventDefault(); } return; }
+    else if(e.key==='Escape'){ ul.classList.remove('open'); return; } else return;
+    lis.forEach((li,i)=>li.classList.toggle('hl',i===idx)); });
+  ul.addEventListener('mousedown',e=>{ const li=e.target.closest('li[data-i]'); if(li){ e.preventDefault(); pick(+li.dataset.i); } });
+  input.addEventListener('blur',()=>setTimeout(()=>ul.classList.remove('open'),150));
   return {
     set(p){ input.place=p||null; input.value=p?label(p):''; },
-    async get(){ if(input.place) return input.place; const v=input.value.trim(); if(!v) return null;
+    async get(){ if(input.place) return input.place; const v=input.value.trim(); if(!v) return null; if(isAny(v)) return (input.place=ANY);
       const l=await finder(v).catch(()=>[]); input.place=l[0]||null; if(input.place) input.value=label(input.place); return input.place; },
   };
 }

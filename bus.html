@@ -19,9 +19,9 @@
 <nav class="nav"><div class="wrap">
   <a class="logo" href="index.html"><span>🌴</span>heybe</a>
   <ul><li><a class="link" data-page="flights" href="index.html" aria-label="Flights">✈️ <span>Flights</span></a></li>
-      <li><a class="link" data-page="hotels" href="hotels.html" aria-label="Hotels">🏨 <span>Hotels</span></a></li>
       <li><a class="link" data-page="bus" href="bus.html" aria-label="Buses">🚌 <span>Buses</span></a></li>
       <li><a class="link" data-page="train" href="train.html" aria-label="Trains">🚆 <span>Trains</span></a></li>
+      <li><a class="link" data-page="hotels" href="hotels.html" aria-label="Hotels">🏨 <span>Hotels</span></a></li>
       <li><a class="link" data-page="things" href="things.html" aria-label="Things to do">🎟️ <span>Things to do</span></a></li>
       <li><a class="link" data-page="help" href="help.html" aria-label="How to use">🧭 <span>How to use</span></a></li></ul>
 </div></nav>
@@ -34,11 +34,13 @@
 
 <main class="wrap lift">
   <section class="card">
-    <h2><span class="ico">🚌</span>Your bus trip</h2>
+    <div class="row" style="margin-bottom:16px"><h2 style="margin:0"><span class="ico">🚌</span>Your bus trip</h2><span class="spacer"></span>
+      <div class="seg" id="tripType"><button type="button" data-v="ow">One way</button><button type="button" data-v="rt">Round trip</button></div></div>
     <form id="f" class="grid g-search">
       <label class="f span-3">From<input id="from" placeholder="City, e.g. Berlin" autocomplete="off" required></label>
       <label class="f span-3">To<input id="to" placeholder="City, e.g. Munich" autocomplete="off" required></label>
-      <label class="f span-2">Date<input type="date" id="date" required></label>
+      <label class="f span-3">Leave on<input type="date" id="date" required></label>
+      <label class="f span-3 rt-only">Come back on<input type="date" id="back"></label>
       <label class="f span-2">Passengers<input type="number" id="adults" min="1" max="9"></label>
       <label class="f span-2">Sort by<select id="sort"><option value="price">Cheapest</option><option value="dep">Earliest</option><option value="mins">Fastest</option></select></label>
       <label class="f span-6">Flexibility (days before &amp; after)
@@ -46,14 +48,30 @@
       <div class="span-6 row end" style="align-self:end"><button class="btn primary" type="submit">Search 🚌</button></div>
     </form>
   </section>
+  <section class="card hidden" id="anyBox">
+    <div class="row"><h2 style="margin:0"><span class="ico">🌍</span><span id="anyTitle">Anywhere by bus</span></h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
+    <p class="sub" style="margin-top:6px" id="anySub"></p>
+    <div class="picks" id="anyPicks"></div>
+  </section>
+  <div id="routeBox">
+  <section class="card hidden" id="rtSum"></section>
   <section class="card">
-    <div class="row"><h2 style="margin:0"><span class="ico">📅</span>Cheapest per day</h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
+    <div class="row"><h2 style="margin:0"><span class="ico">📅</span><span id="daysTitle">Cheapest per day</span></h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
     <div class="day-strip" id="days"></div>
   </section>
   <section class="card">
     <h2><span class="ico">🎫</span><span id="ridesTitle">Rides</span></h2>
     <div class="list" id="rides"><div class="empty">Pick where you go and press Search.</div></div>
   </section>
+  <section class="card rt-only">
+    <div class="row"><h2 style="margin:0"><span class="ico">📅</span>Cheapest day back</h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
+    <div class="day-strip" id="daysBack"></div>
+  </section>
+  <section class="card rt-only">
+    <h2><span class="ico">🎫</span><span id="ridesBackTitle">Rides back</span></h2>
+    <div class="list" id="ridesBack"></div>
+  </section>
+  </div>
   <section class="note" style="margin-top:24px">ℹ️ Prices and seats come live from FlixBus (buses and FlixTrain) and are for all passengers together. Always check the final price on the booking site.</section>
 </main>
 <footer><div class="s">heybe</div>Go see it all 🗺️</footer>

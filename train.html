@@ -19,9 +19,9 @@
 <nav class="nav"><div class="wrap">
   <a class="logo" href="index.html"><span>🌴</span>heybe</a>
   <ul><li><a class="link" data-page="flights" href="index.html" aria-label="Flights">✈️ <span>Flights</span></a></li>
-      <li><a class="link" data-page="hotels" href="hotels.html" aria-label="Hotels">🏨 <span>Hotels</span></a></li>
       <li><a class="link" data-page="bus" href="bus.html" aria-label="Buses">🚌 <span>Buses</span></a></li>
       <li><a class="link" data-page="train" href="train.html" aria-label="Trains">🚆 <span>Trains</span></a></li>
+      <li><a class="link" data-page="hotels" href="hotels.html" aria-label="Hotels">🏨 <span>Hotels</span></a></li>
       <li><a class="link" data-page="things" href="things.html" aria-label="Things to do">🎟️ <span>Things to do</span></a></li>
       <li><a class="link" data-page="help" href="help.html" aria-label="How to use">🧭 <span>How to use</span></a></li></ul>
 </div></nav>
@@ -34,24 +34,39 @@
 
 <main class="wrap lift">
   <section class="card">
-    <h2><span class="ico">🚆</span>Your train trip</h2>
+    <div class="row" style="margin-bottom:16px"><h2 style="margin:0"><span class="ico">🚆</span>Your train trip</h2><span class="spacer"></span>
+      <div class="seg" id="tripType"><button type="button" data-v="ow">One way</button><button type="button" data-v="rt">Round trip</button></div></div>
     <form id="f" class="grid g-search">
-      <label class="f span-3">From<input id="from" placeholder="Station or city, e.g. Nürnberg Hbf" autocomplete="off" required></label>
-      <label class="f span-3">To<input id="to" placeholder="Station or city, e.g. Berlin Hbf" autocomplete="off" required></label>
-      <label class="f span-2">Date<input type="date" id="date" required></label>
-      <label class="f span-2">Leave after<input type="time" id="time" required></label>
+      <label class="f span-3">From<input id="from" placeholder="Station or city, e.g. Nürnberg Hbf" required></label>
+      <label class="f span-3">To<input id="to" placeholder="Station or city, or 🌍 Anywhere" required></label>
+      <label class="f span-2">Leave on<input type="date" id="date" required></label>
+      <label class="f span-2">After<input type="time" id="time" required></label>
+      <label class="f span-2 rt-only">Come back on<input type="date" id="backDate"></label>
+      <label class="f span-2 rt-only">After<input type="time" id="backTime"></label>
       <div class="span-2 row end" style="align-self:end"><button class="btn primary" type="submit">Search 🚆</button></div>
     </form>
   </section>
+  <section class="card hidden" id="anyBox">
+    <div class="row"><h2 style="margin:0"><span class="ico">🌍</span><span id="anyTitle">Anywhere by train</span></h2><span class="spacer"></span><span class="live-tag">FlixTrain prices</span></div>
+    <p class="sub" style="margin-top:6px" id="anySub"></p>
+    <div class="picks" id="anyPicks"></div>
+  </section>
+  <div id="routeBox">
   <section class="card">
     <div class="row"><h2 style="margin:0"><span class="ico">🕒</span><span id="tripsTitle">Trains</span></h2><span class="spacer"></span><span class="live-tag">Timetable</span></div>
     <div class="list" id="trips"><div class="empty">Pick your stations and press Search.</div></div>
     <div class="row end" style="margin-top:10px"><button class="btn ghost sm hidden" id="later" type="button">Later trains →</button></div>
   </section>
+  <section class="card rt-only">
+    <div class="row"><h2 style="margin:0"><span class="ico">🔁</span><span id="tripsBackTitle">Trains back</span></h2><span class="spacer"></span><span class="live-tag">Timetable</span></div>
+    <div class="list" id="tripsBack"></div>
+    <div class="row end" style="margin-top:10px"><button class="btn ghost sm hidden" id="laterBack" type="button">Later trains →</button></div>
+  </section>
   <section class="card">
     <div class="row"><h2 style="margin:0"><span class="ico">💶</span>FlixTrain prices</h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
     <div class="list" id="flixtrain"><div class="empty">Shown after a search, where FlixTrain runs.</div></div>
   </section>
+  </div>
   <section class="note" style="margin-top:24px">ℹ️ Timetables for trains across Europe come from Transitous (open data). It has no prices: "Check price" opens Deutsche Bahn or the train company's own site. FlixTrain prices come live from FlixBus.</section>
 </main>
 <footer><div class="s">heybe</div>Go see it all 🗺️</footer>

@@ -54,3 +54,15 @@ test('train booking: DB trips go to bahn.de with the stations, others to the ope
   const obb = TRANSIT.parse({ itineraries: [{ startTime: 's', endTime: 'e', duration: 1, legs: [leg({ agencyName: 'ÖBB', agencyUrl: 'https://www.oebb.at' })] }] })[0];
   assert.strictEqual(TRANSIT.bookUrl(obb), 'https://www.oebb.at');
 });
+
+test('FlixBus reachable places: the price range in the asked currency, and whether a train goes there', () => {
+  const { FLIX } = load('airports.js', 'common.js');
+  const r = FLIX.parseReachable({ result: [
+    { uuid: 'p', name: 'Prague', country: 'CZ', min_duration: 270.4, transportation_category: ['bus', 'train'], price: { EUR: { min: 14.48, avg: 20 } } },
+    { uuid: 'x', name: 'Nowhere', country: 'DE', price: {} },
+  ] }, 'EUR');
+  assert.strictEqual(r.length, 1);
+  assert.strictEqual(r[0].min, 14.48);
+  assert.strictEqual(r[0].mins, 270);
+  assert.ok(r[0].train && r[0].bus);
+});
