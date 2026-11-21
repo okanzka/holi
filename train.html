@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heybe · Trains</title>
+<meta name="theme-color" content="#f2f5f9">
+<script>try{if(localStorage.getItem('heybe.theme')==='dark'){document.documentElement.dataset.theme='dark';document.querySelector('meta[name=theme-color]').content='#000000';}}catch(e){}</script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚆</text></svg>">
+<link rel="manifest" href="icons/manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Heybe">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+</head>
+<body data-page="train">
+<nav class="nav"><div class="wrap">
+  <a class="logo" href="index.html"><span>🌴</span>heybe</a>
+  <ul><li><a class="link" data-page="flights" href="index.html" aria-label="Flights">✈️ <span>Flights</span></a></li>
+      <li><a class="link" data-page="hotels" href="hotels.html" aria-label="Hotels">🏨 <span>Hotels</span></a></li>
+      <li><a class="link" data-page="bus" href="bus.html" aria-label="Buses">🚌 <span>Buses</span></a></li>
+      <li><a class="link" data-page="train" href="train.html" aria-label="Trains">🚆 <span>Trains</span></a></li>
+      <li><a class="link" data-page="things" href="things.html" aria-label="Things to do">🎟️ <span>Things to do</span></a></li>
+      <li><a class="link" data-page="help" href="help.html" aria-label="How to use">🧭 <span>How to use</span></a></li></ul>
+</div></nav>
+
+<header class="hero small photo"><div class="wrap">
+  <span class="eyebrow">🚆 Train finder</span>
+  <h1>Go by <em>train</em></h1>
+  <p class="lead">Train times and changes across Europe, with links to buy the ticket and live FlixTrain prices.</p>
+</div></header>
+
+<main class="wrap lift">
+  <section class="card">
+    <h2><span class="ico">🚆</span>Your train trip</h2>
+    <form id="f" class="grid g-search">
+      <label class="f span-3">From<input id="from" placeholder="Station or city, e.g. Nürnberg Hbf" autocomplete="off" required></label>
+      <label class="f span-3">To<input id="to" placeholder="Station or city, e.g. Berlin Hbf" autocomplete="off" required></label>
+      <label class="f span-2">Date<input type="date" id="date" required></label>
+      <label class="f span-2">Leave after<input type="time" id="time" required></label>
+      <div class="span-2 row end" style="align-self:end"><button class="btn primary" type="submit">Search 🚆</button></div>
+    </form>
+  </section>
+  <section class="card">
+    <div class="row"><h2 style="margin:0"><span class="ico">🕒</span><span id="tripsTitle">Trains</span></h2><span class="spacer"></span><span class="live-tag">Timetable</span></div>
+    <div class="list" id="trips"><div class="empty">Pick your stations and press Search.</div></div>
+    <div class="row end" style="margin-top:10px"><button class="btn ghost sm hidden" id="later" type="button">Later trains →</button></div>
+  </section>
+  <section class="card">
+    <div class="row"><h2 style="margin:0"><span class="ico">💶</span>FlixTrain prices</h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
+    <div class="list" id="flixtrain"><div class="empty">Shown after a search, where FlixTrain runs.</div></div>
+  </section>
+  <section class="note" style="margin-top:24px">ℹ️ Timetables for trains across Europe come from Transitous (open data). It has no prices: "Check price" opens Deutsche Bahn or the train company's own site. FlixTrain prices come live from FlixBus.</section>
+</main>
+<footer><div class="s">heybe</div>Go see it all 🗺️</footer>
+
+<script src="js/airports.js"></script>
+<script src="js/common.js"></script>
+<script src="js/train.js"></script>
+</body>
+</html>

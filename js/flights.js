@@ -570,6 +570,9 @@ async function loadLegs(){
 }
 const oneBook=(v,from,to)=>v.src==='tp'?(v.link||FLIGHT_SITES[0].url({from,to,dep:v.day,ret:null,adults:T.adults,children:T.children,cabin:T.cabin}))
   :RYANAIR.bookUrl({from,to,dep:v.day,ret:null,adults:T.adults,children:T.children});
+/* links to the Buses and Trains pages for a gap between two flights */
+const groundLinks=(a,b,day)=>{ const q=`?from=${encodeURIComponent(H.cityOf(a))}&to=${encodeURIComponent(H.cityOf(b))}&date=${day}`;
+  return `<a href="bus.html${q}">🚌 Buses</a><a href="train.html${q}">🚆 Trains</a>`; };
 /* the flights of a package, with the nights in each place and the gaps to cover by train or bus between them */
 function legsBody(pk){
   return pk.flights.map((f,i)=>{ const nx=pk.flights[i+1];
@@ -578,7 +581,7 @@ function legsBody(pk){
       <a target="_blank" rel="noopener" title="Book this flight" href="${H.esc(oneBook(f,f.from,f.to))}">Book ↗</a></div>`;
     if(nx){ const n=H.diff(H.parse(f.day),H.parse(nx.day)), nights=`${n} night${n===1?'':'s'}`;
       html+=f.to===nx.from?`<div class="leg-ground">🛏️ ${nights} in ${H.esc(H.cityOf(f.to))}</div>`
-        :`<div class="leg-ground">🚆 ${nights}: ${H.esc(H.cityOf(f.to))} → ${H.esc(H.cityOf(nx.from))} by train or bus</div>`; }
+        :`<div class="leg-ground">🚆 ${nights}: ${H.esc(H.cityOf(f.to))} → ${H.esc(H.cityOf(nx.from))} by train or bus${groundLinks(f.to,nx.from,f.day)}</div>`; }
     return html; }).join('');
 }
 function renderLegs(){

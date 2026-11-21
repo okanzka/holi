@@ -29,7 +29,7 @@ test('the manifest names the app and points at icons that exist', () => {
 });
 
 test('every page links the manifest and the iPhone icon', () => {
-  for (const p of ['index.html', 'hotels.html', 'things.html', 'help.html']) {
+  for (const p of ['index.html', 'hotels.html', 'things.html', 'help.html', 'bus.html', 'train.html']) {
     const html = fs.readFileSync(path.join(root, p), 'utf8');
     assert.match(html, /<link rel="manifest" href="icons\/manifest\.webmanifest">/, p);
     assert.match(html, /<link rel="apple-touch-icon" href="icons\/icon-180\.png">/, p);

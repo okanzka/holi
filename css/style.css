@@ -696,3 +696,21 @@ html[data-theme="dark"] .hero.photo{background-color:#000;background-image:var(-
 .leg-row .x{height:36px;border-radius:10px}
 .leg-ground{font-size:.84rem;color:var(--ink-soft);padding:2px 0 2px 30px}
 @media (max-width:760px){.leg-row{grid-template-columns:24px 1fr 36px}.leg-row input:not(:first-of-type){grid-column:2}}
+/* Buses: cheapest price per day */
+.day-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin-top:12px}
+.day-strip .day{display:flex;flex-direction:column;gap:2px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line,rgba(0,0,0,.08));border-radius:14px;background:var(--paper);color:var(--ink);font:inherit;cursor:pointer;text-align:left}
+.day-strip .day small{color:var(--ink-soft);font-size:.74rem}
+.day-strip .day b{font-variant-numeric:tabular-nums}
+.day-strip .day.wish{border-color:var(--ocean)}
+.day-strip .day.best b{color:var(--great)}
+.day-strip .day.on{background:var(--ocean);color:#fff;border-color:var(--ocean)}
+.day-strip .day.on small,.day-strip .day.on b{color:#fff}
+.day-strip .day:disabled{opacity:.5;cursor:default}
+/* Trains: the trains of a trip */
+.tr-legs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:6px}
+.tr-legs i{font-style:normal;color:var(--muted)}
+.tr-leg{font-size:.74rem;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--sand);color:var(--ink)}
+.leg-ground a{margin-left:6px;font-weight:600;text-decoration:none}
+.deal.ride{grid-template-columns:1fr auto}
+.deal.ride .amt{display:flex;flex-direction:column;align-items:flex-end;text-align:right}
+@media (max-width:760px){.deal.ride .amt{align-items:flex-start;text-align:left}}

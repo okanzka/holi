@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Heybe · Buses</title>
+<meta name="theme-color" content="#f2f5f9">
+<script>try{if(localStorage.getItem('heybe.theme')==='dark'){document.documentElement.dataset.theme='dark';document.querySelector('meta[name=theme-color]').content='#000000';}}catch(e){}</script>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
+<link rel="manifest" href="icons/manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Heybe">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+</head>
+<body data-page="bus">
+<nav class="nav"><div class="wrap">
+  <a class="logo" href="index.html"><span>🌴</span>heybe</a>
+  <ul><li><a class="link" data-page="flights" href="index.html" aria-label="Flights">✈️ <span>Flights</span></a></li>
+      <li><a class="link" data-page="hotels" href="hotels.html" aria-label="Hotels">🏨 <span>Hotels</span></a></li>
+      <li><a class="link" data-page="bus" href="bus.html" aria-label="Buses">🚌 <span>Buses</span></a></li>
+      <li><a class="link" data-page="train" href="train.html" aria-label="Trains">🚆 <span>Trains</span></a></li>
+      <li><a class="link" data-page="things" href="things.html" aria-label="Things to do">🎟️ <span>Things to do</span></a></li>
+      <li><a class="link" data-page="help" href="help.html" aria-label="How to use">🧭 <span>How to use</span></a></li></ul>
+</div></nav>
+
+<header class="hero small photo"><div class="wrap">
+  <span class="eyebrow">🚌 Bus finder</span>
+  <h1>Go by <em>bus</em></h1>
+  <p class="lead">Live FlixBus prices and times between European cities, with the cheapest day around your date.</p>
+</div></header>
+
+<main class="wrap lift">
+  <section class="card">
+    <h2><span class="ico">🚌</span>Your bus trip</h2>
+    <form id="f" class="grid g-search">
+      <label class="f span-3">From<input id="from" placeholder="City, e.g. Berlin" autocomplete="off" required></label>
+      <label class="f span-3">To<input id="to" placeholder="City, e.g. Munich" autocomplete="off" required></label>
+      <label class="f span-2">Date<input type="date" id="date" required></label>
+      <label class="f span-2">Passengers<input type="number" id="adults" min="1" max="9"></label>
+      <label class="f span-2">Sort by<select id="sort"><option value="price">Cheapest</option><option value="dep">Earliest</option><option value="mins">Fastest</option></select></label>
+      <label class="f span-6">Flexibility (days before &amp; after)
+        <div class="flex-pills" id="flexPills"><button type="button" data-v="0">Exact</button><button type="button" data-v="1">± 1</button><button type="button" data-v="2">± 2</button><button type="button" data-v="3">± 3</button></div></label>
+      <div class="span-6 row end" style="align-self:end"><button class="btn primary" type="submit">Search 🚌</button></div>
+    </form>
+  </section>
+  <section class="card">
+    <div class="row"><h2 style="margin:0"><span class="ico">📅</span>Cheapest per day</h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
+    <div class="day-strip" id="days"></div>
+  </section>
+  <section class="card">
+    <h2><span class="ico">🎫</span><span id="ridesTitle">Rides</span></h2>
+    <div class="list" id="rides"><div class="empty">Pick where you go and press Search.</div></div>
+  </section>
+  <section class="note" style="margin-top:24px">ℹ️ Prices and seats come live from FlixBus (buses and FlixTrain) and are for all passengers together. Always check the final price on the booking site.</section>
+</main>
+<footer><div class="s">heybe</div>Go see it all 🗺️</footer>
+
+<script src="js/airports.js"></script>
+<script src="js/common.js"></script>
+<script src="js/bus.js"></script>
+</body>
+</html>

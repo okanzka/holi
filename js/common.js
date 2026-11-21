@@ -874,3 +874,85 @@ const LEGS = {
     return {packages,missing};
   },
 };
+
+/* ---------- buses and trains: FlixBus (prices, also FlixTrain) and Transitous (European train timetables).
+   Both answer the browser directly, so this works without the local server too. ---------- */
+const dmy=iso=>iso.slice(8,10)+'.'+iso.slice(5,7)+'.'+iso.slice(0,4);
+const FLIX = {
+  base:'https://global.api.flixbus.com',
+  async cities(q,signal){
+    if(!q||q.trim().length<2) return [];
+    const r=await NET.json(`${this.base}/search/autocomplete/cities?`+new URLSearchParams({q:q.trim(),lang:'en',country:'de',flixbus_cities_only:'false'}),{signal},10000);
+    return (r.ok&&Array.isArray(r.data)?r.data:[]).slice(0,8).map(c=>({id:c.id,name:c.name,country:String(c.country||'').toUpperCase()}));
+  },
+  /* one day's rides, cheapest first */
+  async search({from,to,date,adults,currency,signal}){
+    const r=await NET.json(`${this.base}/search/service/v4/search?`+new URLSearchParams({from_city_id:from,to_city_id:to,departure_date:dmy(date),
+      products:JSON.stringify({adult:adults||1}),currency:currency||'EUR',locale:'en',search_by:'cities',include_after_midnight_rides:'1'}),{signal},15000);
+    if(!r.ok) throw new Error('FlixBus '+r.status);
+    return FLIX.parse(r.data,{from,to,date,adults,currency});
+  },
+  /* {dep, arr (ISO with offset), mins, price (all travellers, with FlixBus's platform fee), cur, transfers, seats, modes ['bus'|'train'], fromSt, toSt, url} */
+  parse(d,q){
+    const st=(d&&d.stations)||{};
+    return ((d&&d.trips)||[]).flatMap(t=>Object.values(t.results||{}))
+      .filter(x=>x&&x.status==='available'&&x.price&&x.price.total!=null&&x.departure&&x.arrival)
+      .map(x=>({dep:x.departure.date,arr:x.arrival.date,mins:x.duration?(x.duration.hours||0)*60+(x.duration.minutes||0):0,
+        price:x.price.total_with_platform_fee!=null?x.price.total_with_platform_fee:x.price.total,cur:q.currency||'EUR',transfers:Math.max(0,(x.legs||[]).length-1),seats:x.available?x.available.seats:null,
+        modes:[...new Set((x.legs||[]).map(l=>l.means_of_transport).filter(Boolean))],
+        fromSt:(st[x.departure.station_id]||{}).name||'',toSt:(st[x.arrival.station_id]||{}).name||'',url:FLIX.bookUrl(q)}))
+      .sort((a,b)=>a.price-b.price);
+  },
+  bookUrl(q){ return 'https://shop.flixbus.com/search?'+new URLSearchParams({departureCity:q.from,arrivalCity:q.to,rideDate:dmy(q.date),adult:q.adults||1,_locale:'en'}); },
+};
+const TRANSIT = {
+  base:'https://api.transitous.org/api/v1',
+  /* stations and towns for a name: {name, lat, lon, tz, country} */
+  async places(q,signal){
+    if(!q||q.trim().length<2) return [];
+    const r=await NET.json(`${this.base}/geocode?`+new URLSearchParams({text:q.trim()}),{signal},10000);
+    const seen=new Set();
+    return (r.ok&&Array.isArray(r.data)?r.data:[]).filter(p=>p.type==='STOP'||p.type==='PLACE')
+      .map(p=>({name:p.name,lat:p.lat,lon:p.lon,tz:p.tz||'',country:p.country||''}))
+      .filter(p=>{ const k=p.name+'|'+p.country; if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,8);
+  },
+  /* trains leaving after `time` (ISO); cursor: the `next` of an earlier answer, for later trains */
+  async plan({from,to,time,cursor,signal}){
+    const p={fromPlace:from.lat+','+from.lon,toPlace:to.lat+','+to.lon,time,transitModes:'RAIL',numItineraries:'6'};
+    if(cursor) p.pageCursor=cursor;
+    const r=await NET.json(`${this.base}/plan?`+new URLSearchParams(p),{signal},30000);
+    if(!r.ok) throw new Error('Transitous '+r.status);
+    return {trips:TRANSIT.parse(r.data),next:(r.data&&r.data.nextPageCursor)||null};
+  },
+  /* {dep, arr (ISO), mins, transfers, legs:[{name, from, to, dep, arr, agency, url}]} — walks left out */
+  parse(d){
+    return ((d&&d.itineraries)||[]).map(it=>({dep:it.startTime,arr:it.endTime,mins:Math.round((it.duration||0)/60),transfers:it.transfers||0,
+      legs:(it.legs||[]).filter(l=>l.mode!=='WALK').map(l=>({name:l.displayName||l.routeShortName||l.tripShortName||l.mode,from:(l.from||{}).name||'',to:(l.to||{}).name||'',
+        dep:l.startTime,arr:l.endTime,agency:l.agencyName||'',url:l.agencyUrl||''}))})).filter(it=>it.legs.length);
+  },
+  /* where to buy: Deutsche Bahn trips on bahn.de with the stations filled in, others on the first operator's site */
+  bookUrl(it){
+    const l=it.legs[0];
+    if(it.legs.some(x=>/DB |Deutsche Bahn/i.test(x.agency))||!l.url)
+      return 'https://www.bahn.de/buchung/fahrplan/suche#'+new URLSearchParams({sts:'true',so:l.from,zo:it.legs[it.legs.length-1].to,hd:it.dep.slice(0,16)});
+    return l.url;
+  },
+};
+/* a text box that suggests places while typing (bus and train pages). finder(q, signal) → [{name, country, …}].
+   get() gives the picked place, or the best match for what was typed. */
+function placeBox(input,finder){
+  const label=p=>p.name+(p.country?', '+p.country:'');
+  const dl=document.createElement('datalist'); dl.id=input.id+'List'; input.setAttribute('list',dl.id); input.after(dl);
+  let opts=[], timer=null, ctl=null;
+  input.addEventListener('input',()=>{
+    const hit=opts.find(p=>label(p)===input.value); input.place=hit||null; if(hit) return;
+    clearTimeout(timer); timer=setTimeout(async()=>{ if(ctl) ctl.abort(); ctl=new AbortController();
+      try{ opts=await finder(input.value,ctl.signal); dl.innerHTML=opts.map(p=>`<option value="${H.esc(label(p))}">`).join('');
+        const h=opts.find(p=>label(p)===input.value); if(h) input.place=h; }catch(e){} },250); });
+  return {
+    set(p){ input.place=p||null; input.value=p?label(p):''; },
+    async get(){ if(input.place) return input.place; const v=input.value.trim(); if(!v) return null;
+      const l=await finder(v).catch(()=>[]); input.place=l[0]||null; if(input.place) input.value=label(input.place); return input.place; },
+  };
+}
+const hm=m=>`${Math.floor(m/60)}h ${String(m%60).padStart(2,'0')}m`;
