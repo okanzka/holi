@@ -35,17 +35,22 @@
   <section class="card">
     <div class="row" style="margin-bottom:16px">
       <h2 style="margin:0"><span class="ico">🧭</span>Your trip</h2><span class="spacer"></span>
-      <div class="seg" id="tripType"><button type="button" data-v="rt">Round trip</button><button type="button" data-v="ow">One way</button><button type="button" data-v="mc">🔀 Multi-city</button><button type="button" data-v="via">🧭 ? → Last stop → Home</button><button type="button" data-v="open">🛬 ? → Last stop → B</button></div>
+      <div class="seg" id="tripType"><button type="button" data-v="rt">Round trip</button><button type="button" data-v="ow">One way</button><button type="button" data-v="mc">🔀 Multi-city</button><button type="button" data-v="via">🧭 ? → Last stop → Home</button><button type="button" data-v="open">🛬 ? → Last stop → B</button><button type="button" data-v="meet">👥 Meet up</button><button type="button" data-v="legs">✈️ My flights</button></div>
     </div>
     <form id="f" class="grid g-search">
-      <label class="f span-3">From<input name="from" data-ac data-anywhere required placeholder="City, airport, code or Anywhere"></label>
+      <label class="f span-3"><span id="fromLbl">From</span><input name="from" data-ac data-anywhere required placeholder="City, airport, code or Anywhere"></label>
       <button type="button" class="swap" id="swap" title="Swap" style="grid-column:span 1">⇄</button>
-      <label class="f span-3">To<input name="to" data-ac data-anywhere required placeholder="Anywhere, or a city"></label>
+      <label class="f span-2 meet-only">Friend flies from<input id="meetFrom" data-ac placeholder="e.g. Berlin"></label>
+      <label class="f span-3"><span id="toLbl">To</span><input name="to" data-ac data-anywhere required placeholder="Anywhere, or a city"></label>
       <label class="f span-2 via-only">Via<input id="viaMid" data-ac data-anywhere placeholder="🌍 Anywhere"></label>
       <label class="f span-2 via-only"><span id="viaLastLbl">Last stop, then home</span><input id="viaLast" data-ac placeholder="e.g. Mallorca"></label>
       <label class="f span-2 open-only">Finish at (B)<input id="viaEnd" data-ac placeholder="e.g. Istanbul"></label>
-      <label class="f span-2">Leave around<input type="date" name="start" required></label>
-      <label class="f span-3" id="endWrap">Come back around<input type="date" name="end"></label>
+      <div class="f span-12 legs-only"><span class="lbl">Your flights, in order (they don't have to connect: cover a gap by train or bus)</span>
+        <div id="legRows" class="leg-rows"></div>
+        <div class="row" style="gap:12px;margin-top:8px"><button type="button" class="btn ghost sm" id="legAdd">+ Add flight</button>
+          <label class="f" style="flex-direction:row;align-items:center;gap:8px;margin:0">Nights between flights, at least<input id="legGap" type="number" min="0" max="14" style="width:70px"></label></div></div>
+      <label class="f span-2"><span id="startLbl">Leave around</span><input type="date" name="start" required></label>
+      <label class="f span-3" id="endWrap"><span id="endLbl">Come back around</span><input type="date" name="end"></label>
       <label class="f span-6">Flexibility (days before &amp; after)
         <div class="flex-pills" id="flexPills">
           <button type="button" data-v="0">Exact</button><button type="button" data-v="1">± 1</button><button type="button" data-v="2">± 2</button>
@@ -120,6 +125,31 @@
       <div class="filters"><label class="f">Search<input id="mcQ" placeholder="Filter by city or country…"></label>
         <label class="f">Max total / person<input id="mcMaxP" type="number" min="0" placeholder="any"></label></div>
       <div class="list" id="mcList"></div>
+    </section>
+  </div>
+
+  <!-- ================= MEET-UP MODE ================= -->
+  <div id="meetMode" class="hidden">
+    <section class="card">
+      <div class="row"><h2 style="margin:0"><span class="ico">👥</span><span id="meetTitle">Meet up</span></h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
+      <p class="sub" style="margin-top:6px" id="meetSub"></p>
+      <div class="picks" id="meetPicks"></div>
+    </section>
+    <section class="card">
+      <h2><span class="ico">📋</span>Every plan</h2>
+      <div class="filters"><label class="f">Search<input id="meetQ" placeholder="Filter by city or country…"></label>
+        <label class="f">Days apart<select id="meetGap"><option value="">Any</option><option value="0">Same days only</option><option value="1">Up to 1 day</option><option value="2">Up to 2 days</option></select></label>
+        <label class="f">Max total (both)<input id="meetMax" type="number" min="0" placeholder="any"></label></div>
+      <div class="list" id="meetList"></div>
+    </section>
+  </div>
+
+  <!-- ================= MY FLIGHTS MODE ================= -->
+  <div id="legsMode" class="hidden">
+    <section class="card">
+      <div class="row"><h2 style="margin:0"><span class="ico">✈️</span><span id="legsTitle">My flights</span></h2><span class="spacer"></span><span class="live-tag">Live prices</span></div>
+      <p class="sub" style="margin-top:6px" id="legsSub"></p>
+      <div class="picks" id="legsPicks"></div>
     </section>
   </div>
 

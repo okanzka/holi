@@ -755,3 +755,106 @@ const FARES = {
     return out;
   },
 };
+
+/* ---------- meet-up: two people from two home cities meet in one place, then each flies home ----------
+   Same arrival and same return days come first; then one of them landing or leaving up to `flex` days apart. */
+const MEET = {
+  /* combine four per-day fare maps ({YYYY-MM-DD:{price,…}}): a = you, b = friend.
+     o: {start, end, flex, today}. One combo per (arrival gap, return gap), the cheapest; ordered by gap, then price.
+     gapOut/gapBack: days the friend lands/leaves after you (negative = before). */
+  combos(aOut,aBack,bOut,bBack,o){
+    const f=Math.max(0,o.flex|0);
+    const days=c=>Array.from({length:2*f+1},(_,i)=>H.fmt(H.add(H.parse(c),i-f))).filter(d=>!o.today||d>=o.today);
+    const has=(m,d)=>!!(m&&m[d]&&m[d].price!=null), gap=(x,y)=>H.diff(H.parse(x),H.parse(y));
+    const outs=days(o.start), backs=days(o.end), best=new Map();
+    for(const ao of outs){ if(!has(aOut,ao)) continue;
+      for(const bo of outs){ if(!has(bOut,bo)) continue; const gO=gap(ao,bo); if(Math.abs(gO)>f) continue;
+        for(const ab of backs){ if(!has(aBack,ab)||ab<=ao) continue;
+          for(const bb of backs){ if(!has(bBack,bb)||bb<=bo) continue; const gB=gap(ab,bb); if(Math.abs(gB)>f) continue;
+            const from=ao>bo?ao:bo, to=ab<bb?ab:bb; if(to<=from) continue;   // at least one night together
+            const total=aOut[ao].price+aBack[ab].price+bOut[bo].price+bBack[bb].price, k=gO+','+gB, c=best.get(k);
+            if(!c||total<c.total) best.set(k,{a:{out:{day:ao,...aOut[ao]},back:{day:ab,...aBack[ab]}},b:{out:{day:bo,...bOut[bo]},back:{day:bb,...bBack[bb]}},
+              gapOut:gO,gapBack:gB,gap:Math.abs(gO)+Math.abs(gB),together:gap(from,to),total,cur:aOut[ao].cur}); } } } }
+    return [...best.values()].sort(MEET.order);
+  },
+  order:(p,q)=>p.gap-q.gap||p.total-q.total,
+  /* o: {a, b (home airports), to (airport or 'ANY'), start, end, flex, currency, noRy, max (Anywhere: cities to check), signal} */
+  async search(o,progress=()=>{}){
+    const t=new Date(); t.setHours(0,0,0,0); const today=H.fmt(t), f=Math.max(0,o.flex|0);
+    let first=H.fmt(H.add(H.parse(o.start),-f)); if(first<today) first=today;
+    const outTo=H.fmt(H.add(H.parse(o.start),f)), latest=H.fmt(H.add(H.parse(o.end),f));
+    let dests;
+    if(o.to&&o.to!=='ANY') dests=[{code:o.to}];
+    else {
+      progress(`Finding cities with direct flights from both ${o.a} and ${o.b}…`);
+      const [la,lb]=await Promise.all([o.a,o.b].map(c=>MLEGS.oneWays({from:c,outFrom:first,outTo,currency:o.currency,signal:o.signal,noRy:o.noRy},true).catch(()=>[])));
+      NET.check(o.signal);
+      const cheapA=new Map(); la.forEach(x=>{ const c=cheapA.get(x.dest); if(!c||x.pp<c.pp) cheapA.set(x.dest,x); });
+      const both=new Map();
+      lb.forEach(x=>{ const a=cheapA.get(x.dest); if(!a||x.dest===o.a||x.dest===o.b) return;
+        const s=a.pp+x.pp, c=both.get(x.dest); if(!c||s<c.s) both.set(x.dest,{code:x.dest,s}); });
+      dests=[...both.values()].sort((p,q)=>p.s-q.s).slice(0,o.max||10);
+      if(!dests.length) return {results:[],checked:0,note:`No city has direct flights from both ${o.a} and ${o.b} on these dates.`};
+    }
+    const months=[]; for(let d=new Date(H.parse(first).getFullYear(),H.parse(first).getMonth(),1);d<=H.parse(latest);d=new Date(d.getFullYear(),d.getMonth()+1,1)) months.push(H.fmt(d));
+    let n=0;
+    const per=await pool(dests,2,async d=>{
+      progress(`Checking daily fares${dests.length>1?` to ${H.cityOf(d.code)} (${++n}/${dests.length})`:''}…`);
+      const legs=await Promise.all([[o.a,d.code],[d.code,o.a],[o.b,d.code],[d.code,o.b]].map(([x,y])=>MLEGS.perDay(x,y,months,o.currency,o.signal,o.noRy).catch(()=>({}))));
+      return MEET.combos(...legs,{start:o.start,end:o.end,flex:f,today}).map(c=>({...c,dest:d.code}));
+    },o.signal);
+    return {results:per.flat().sort(MEET.order),checked:dests.length};
+  },
+};
+
+/* ---------- my flights: direct flights the user picked (A→B, B→C, D→A…; a gap is covered by train or bus),
+   the best dates for all of them as one trip, in order, with at least `gap` nights between two flights ---------- */
+const LEGS = {
+  /* allowed days and wished day per leg. A leg with its own day: that day ±flex. Otherwise the first leg leaves
+     around start, the last one around end, the ones between anywhere in the trip, wished evenly spaced. */
+  windows(legs,o){
+    const f=Math.max(0,o.flex|0), n=legs.length, len=H.diff(H.parse(o.start),H.parse(o.end));
+    const span=(a,b)=>{ const out=[]; for(let d=H.parse(a);d<=H.parse(b);d=H.add(d,1)){ const s=H.fmt(d); if(!o.today||s>=o.today) out.push(s); } return out; };
+    const around=c=>span(H.fmt(H.add(H.parse(c),-f)),H.fmt(H.add(H.parse(c),f)));
+    return legs.map((l,i)=>({
+      target:l.day||(n===1?o.start:H.fmt(H.add(H.parse(o.start),Math.round(i*len/(n-1))))),
+      allowed:l.day?around(l.day):i===0?around(o.start):i===n-1?around(o.end):span(H.fmt(H.add(H.parse(o.start),-f)),H.fmt(H.add(H.parse(o.end),f)))}));
+  },
+  /* cheapest dated plan over per-day fare maps; perDay = cost of each day away from the wished day (0 = cheapest only).
+     null when no plan keeps the order and the gap. */
+  plan(maps,wins,gap,perDay){
+    const rows=[];
+    for(let i=0;i<maps.length;i++){
+      const row=new Map(), prev=rows[i-1];
+      for(const d of wins[i].allowed){ const f=maps[i]&&maps[i][d]; if(!f||f.price==null) continue;
+        const cost=f.price+perDay*Math.abs(H.diff(H.parse(wins[i].target),H.parse(d)));
+        if(!prev){ row.set(d,{cost,back:null}); continue; }
+        let b=null; for(const [pd,v] of prev) if(H.diff(H.parse(pd),H.parse(d))>=gap&&(!b||v.cost<b.cost)) b={cost:v.cost,pd};
+        if(b) row.set(d,{cost:cost+b.cost,back:b.pd}); }
+      if(!row.size) return null; rows.push(row); }
+    let d=null, c=Infinity; for(const [k,v] of rows[rows.length-1]) if(v.cost<c){ c=v.cost; d=k; }
+    const days=[]; for(let i=rows.length-1;i>=0;i--){ days.unshift(d); d=rows[i].get(d).back; }
+    return days.map((day,i)=>({...maps[i][day],day}));
+  },
+  /* up to three different plans: cheapest, a balance of price and spacing, closest to the wished days */
+  packages(maps,wins,gap){
+    const out=[], seen=new Set();
+    [['Cheapest',0],['Best balance',6],['Closest to your days',25]].forEach(([label,w])=>{
+      const fl=LEGS.plan(maps,wins,gap,w); if(!fl) return; const k=fl.map(x=>x.day).join(); if(seen.has(k)) return; seen.add(k);
+      out.push({label,flights:fl,total:fl.reduce((a,x)=>a+x.price,0),cur:fl[0].cur}); });
+    return out;
+  },
+  /* o: {legs:[{from,to,day?}], start, end, flex, gap, currency, noRy, signal} */
+  async search(o,progress=()=>{}){
+    const t=new Date(); t.setHours(0,0,0,0);
+    const wins=LEGS.windows(o.legs,{...o,today:H.fmt(t)}), all=wins.flatMap(w=>w.allowed).sort();
+    if(!all.length) return {packages:[],missing:[],note:'These dates are in the past. Pick dates from today on.'};
+    const months=[]; for(let d=new Date(H.parse(all[0]).getFullYear(),H.parse(all[0]).getMonth(),1);d<=H.parse(all[all.length-1]);d=new Date(d.getFullYear(),d.getMonth()+1,1)) months.push(H.fmt(d));
+    progress(`Checking daily fares for ${o.legs.length} flight${o.legs.length>1?'s':''}…`);
+    const maps=await Promise.all(o.legs.map(l=>MLEGS.perDay(l.from,l.to,months,o.currency,o.signal,o.noRy).catch(()=>({}))));
+    NET.check(o.signal);
+    const missing=o.legs.map((l,i)=>wins[i].allowed.some(d=>maps[i][d]&&maps[i][d].price!=null)?-1:i).filter(i=>i>=0);
+    const packages=missing.length?[]:LEGS.packages(maps,wins,Math.max(0,o.gap|0)).map(p=>({...p,flights:p.flights.map((f,i)=>({...f,from:o.legs[i].from,to:o.legs[i].to}))}));
+    return {packages,missing};
+  },
+};

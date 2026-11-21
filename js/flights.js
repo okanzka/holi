@@ -185,7 +185,7 @@ const alOf=d=>H.alOf(d);
 let noRyanair=false;                                // the "Hide Ryanair" switch, kept across searches
 const fareOf=v=>H.pickFare(v,{noRyanair,sel:any.alSel});   // one-route view: the fare to show for a day
 /* the Airlines menu or chips changed: redraw whichever view is on screen */
-const alChanged=()=>{ if(T.tripType==='mc'||isVia(T.tripType)){ renderMulti(); loadMulti().catch(quiet); }   /* "Without Ryanair" searches again without Ryanair */ else if(H.isDealMode(T)) renderAnywhere(); else { renderRoute(); renderCal(); } };
+const alChanged=()=>{ if(T.tripType==='legs'){ renderLegs(); loadLegs().catch(quiet); } else if(T.tripType==='meet'){ renderMeet(); loadMeet().catch(quiet); } else if(T.tripType==='mc'||isVia(T.tripType)){ renderMulti(); loadMulti().catch(quiet); }   /* "Without Ryanair" searches again without Ryanair */ else if(H.isDealMode(T)) renderAnywhere(); else { renderRoute(); renderCal(); } };
 const shown=()=>noRyanair?any.deals.map(d=>H.isRyanair(d)?d.alt:d).filter(Boolean):any.deals;
 /* airline logo(s): both when the way back is a different airline (two one-way tickets) */
 const alLogos=d=>H.alLogo(alOf(d),true)+(d.inAirline&&d.inAirline!==alOf(d)?' + '+H.alLogo(d.inAirline,true):'');
@@ -529,6 +529,143 @@ function bindMcStays(root){ root.querySelectorAll('[data-mcstay]').forEach(b=>b.
     flights:it.legs.map(l=>({from:l.from,to:l.to,dep:l.dep.slice(0,10),url:legBook(l)}))}); }); }
 
 /* =====================================================================
+   MY FLIGHTS MODE — direct flights the user picked (A→B, B→C, D→A…), the best dates as one trip
+   ===================================================================== */
+let mine={key:'',res:null,loading:false,msg:'',err:null};
+const legsParams=()=>({legs:T.legs||[],start:T.start,end:T.end,flex,gap:T.legGap==null?1:T.legGap,currency:T.currency,noRy:noRyanair});
+/* the editable list of flights in the form */
+function renderLegRows(list){
+  const box=$('#legRows'); box.innerHTML='';
+  list.forEach((l,i)=>{ const r=document.createElement('div'); r.className='leg-row';
+    r.innerHTML=`<span class="n">${i+1}</span><input data-k="from" placeholder="From, e.g. Nuremberg" aria-label="Flight ${i+1} from"><input data-k="to" placeholder="To, e.g. Rome" aria-label="Flight ${i+1} to">
+      <input data-k="day" type="date" title="Optional: fly around this day" aria-label="Flight ${i+1} day (optional)"><button type="button" class="btn ghost sm x" title="Remove this flight">✕</button>`;
+    const [fi,ti,di]=r.querySelectorAll('input');
+    attachAutocomplete(fi); attachAutocomplete(ti); if(l.from) setAirport(fi,l.from); if(l.to) setAirport(ti,l.to); di.value=l.day||'';
+    r.querySelector('.x').onclick=()=>{ const cur=readLegRows(); cur.splice(i,1); renderLegRows(cur.length?cur:[{}]); };
+    box.appendChild(r); });
+}
+/* what the rows hold now, without checking it */
+const readLegRows=()=>[...document.querySelectorAll('#legRows .leg-row')].map(r=>{ const [fi,ti,di]=r.querySelectorAll('input');
+  return {from:fi.value.trim()?H.codeOf(fi):'',to:ti.value.trim()?H.codeOf(ti):'',day:di.value||null,_f:fi,_t:ti}; });
+/* the rows as flights, or null after telling the user what to fix */
+function readLegs(){
+  const rows=readLegRows().filter(l=>l.from||l.to||l.day);
+  if(!rows.length){ H.toast('Add at least one flight'); return null; }
+  for(const [i,l] of rows.entries()){
+    const bad=c=>!c||c==='ANY'||H.isCountry(c);
+    if(bad(l.from)){ H.toast(`Flight ${i+1}: pick the airport you fly from`); l._f.focus(); return null; }
+    if(bad(l.to)){ H.toast(`Flight ${i+1}: pick the airport you fly to`); l._t.focus(); return null; }
+    if(l.from===l.to){ H.toast(`Flight ${i+1}: from and to are the same`); l._t.focus(); return null; }
+  }
+  return rows.map(({from,to,day})=>({from,to,day}));
+}
+async function loadLegs(){
+  const p=legsParams(), key=JSON.stringify(p); if(mine.key===key) return;
+  if(!p.legs.length){ mine={key,res:null,loading:false,msg:'',err:'Add your flights in the form above, then press Search.'}; renderLegs(); return; }
+  mine={key,res:null,loading:true,msg:'Starting…',err:null}; renderLegs();
+  const signal=NET.begin('legs');
+  try{ const r=await LEGS.search({...p,signal},m=>{ if(mine.key===key){ mine.msg=m; renderLegs(); } }); if(mine.key!==key) return; mine.res=r; }
+  catch(e){ if(mine.key!==key) return; mine.err='Could not load flights. Check your internet connection and try again.'; }
+  mine.loading=false; renderLegs();
+}
+const oneBook=(v,from,to)=>v.src==='tp'?(v.link||FLIGHT_SITES[0].url({from,to,dep:v.day,ret:null,adults:T.adults,children:T.children,cabin:T.cabin}))
+  :RYANAIR.bookUrl({from,to,dep:v.day,ret:null,adults:T.adults,children:T.children});
+/* the flights of a package, with the nights in each place and the gaps to cover by train or bus between them */
+function legsBody(pk){
+  return pk.flights.map((f,i)=>{ const nx=pk.flights[i+1];
+    let html=`<div class="mc-leg"><span class="n">${i+1}</span><span>${H.alLogo(f.airline||'FR')} ${H.nice(H.parse(f.day))} ${H.time(f.dep)}</span>
+      <b>${f.from} → ${f.to}</b><span class="p">${priceFmt(f.price,f.cur)}</span>
+      <a target="_blank" rel="noopener" title="Book this flight" href="${H.esc(oneBook(f,f.from,f.to))}">Book ↗</a></div>`;
+    if(nx){ const n=H.diff(H.parse(f.day),H.parse(nx.day)), nights=`${n} night${n===1?'':'s'}`;
+      html+=f.to===nx.from?`<div class="leg-ground">🛏️ ${nights} in ${H.esc(H.cityOf(f.to))}</div>`
+        :`<div class="leg-ground">🚆 ${nights}: ${H.esc(H.cityOf(f.to))} → ${H.esc(H.cityOf(nx.from))} by train or bus</div>`; }
+    return html; }).join('');
+}
+function renderLegs(){
+  const p=legsParams(), L=p.legs;
+  $('#legsTitle').textContent=L.length?L.map(l=>`${l.from}→${l.to}`).join(' · '):'My flights';
+  $('#legsSub').textContent=`${L.length} direct flight${L.length===1?'':'s'}, in order, at least ${p.gap} night${p.gap===1?'':'s'} between two flights. First flight around ${H.short(H.parse(p.start))}, last around ${H.short(H.parse(p.end))} (± ${p.flex} day${p.flex===1?'':'s'}). Prices per person.`;
+  const box=(cls,txt)=>{ $('#legsPicks').innerHTML=`<div class="${cls}" style="grid-column:1/-1">${H.esc(txt)}</div>`; };
+  if(mine.loading) return box('loading',mine.msg);
+  if(mine.err) return box('empty',mine.err);
+  if(!mine.res) return box('empty','Press Search to find dates.');
+  const r=mine.res;
+  if(r.note) return box('empty',r.note);
+  if(r.missing.length) return box('empty',`No direct flight found for ${r.missing.map(i=>`${L[i].from} → ${L[i].to}`).join(', ')} on these dates. Try other dates, more flexibility, or a nearby airport.`);
+  if(!r.packages.length) return box('empty','The flights do not fit in order with these dates. Try fewer nights between flights, more flexibility, or a longer trip.');
+  $('#legsPicks').innerHTML=r.packages.map((pk,i)=>`<div class="pick"><span class="rank">#${i+1}</span><span class="badge ${i?'b-good':'b-great'}">${pk.label}</span>
+      <h3>${H.short(H.parse(pk.flights[0].day))} – ${H.short(H.parse(pk.flights[pk.flights.length-1].day))}</h3>
+      <div class="price">${priceFmt(pk.total,pk.cur)}<span class="hint"> / person, ${pk.flights.length} flight${pk.flights.length>1?'s':''}</span></div>
+      <div class="meta">≈ ${priceFmt(pk.total*pax(),pk.cur)} for ${pax()} traveller${pax()>1?'s':''}</div>
+      <div class="mc-legs">${legsBody(pk)}</div></div>`).join('');
+}
+
+/* =====================================================================
+   MEET-UP MODE — you and a friend fly from two cities to one place, then each flies home
+   ===================================================================== */
+let meet={key:'',res:null,loading:false,msg:'',err:null};
+const meetParams=()=>({a:T.from,b:T.meetFrom||null,to:T.to||'ANY',start:T.start,end:T.end,flex,currency:T.currency,noRy:noRyanair,max:10});
+async function loadMeet(){
+  const p=meetParams(), key=JSON.stringify(p); if(meet.key===key) return;
+  if(!p.b){ meet={key,res:null,loading:false,msg:'',err:'Pick the city your friend flies from in the form above, then press Search.'}; renderMeet(); return; }
+  meet={key,res:null,loading:true,msg:'Starting…',err:null}; renderMeet();
+  const signal=NET.begin('meet');
+  try{ const r=await MEET.search({...p,signal},m=>{ if(meet.key===key){ meet.msg=m; renderMeet(); } }); if(meet.key!==key) return; meet.res=r; }
+  catch(e){ if(meet.key!==key) return; meet.err='Could not load flights. Check your internet connection and try again.'; }
+  meet.loading=false; renderMeet();
+}
+const meetBook=(v,from,to)=>v.src==='tp'?(v.link||FLIGHT_SITES[0].url({from,to,dep:v.day,ret:null,adults:1,children:0,cabin:T.cabin}))
+  :RYANAIR.bookUrl({from,to,dep:v.day,ret:null,adults:1,children:0});
+/* who: 'a' (first home city) or 'b' (second); the badge shows the home city's first letter, or 1/2 when both start alike */
+const meetTag=who=>{ const p=meetParams(), a=H.cityOf(p.a)[0]||'1', b=H.cityOf(p.b||'')[0]||'2'; return a.toUpperCase()===b.toUpperCase()?(who==='a'?'1':'2'):(who==='a'?a:b).toUpperCase(); };
+const meetLeg=(who,v,from,to)=>`<div class="mc-leg"><span class="n"${who==='b'?' style="background:var(--good)"':''} title="${H.esc(H.cityOf(who==='b'?meetParams().b:meetParams().a))}">${meetTag(who)}</span>
+  <span>${H.alLogo(v.airline||'FR')} ${H.nice(H.parse(v.day))} ${H.time(v.dep)}</span><b>${from} → ${to}</b><span class="p">${priceFmt(v.price,v.cur)}</span>
+  <a target="_blank" rel="noopener" title="Book this flight" href="${H.esc(meetBook(v,from,to))}">Book ↗</a></div>`;
+const meetLegs=c=>{ const p=meetParams(); return meetLeg('a',c.a.out,p.a,c.dest)+meetLeg('b',c.b.out,p.b,c.dest)+meetLeg('a',c.a.back,c.dest,p.a)+meetLeg('b',c.b.back,c.dest,p.b); };
+/* who pays what: each home city's two flights */
+const meetSplit=c=>{ const p=meetParams(); return `${H.esc(H.cityOf(p.a))}: <b>${priceFmt(c.a.out.price+c.a.back.price,c.cur)}</b> · ${H.esc(H.cityOf(p.b))}: <b>${priceFmt(c.b.out.price+c.b.back.price,c.cur)}</b>`; };
+function meetGapText(c){ if(!c.gap) return 'Same days ✓';
+  const bN=H.cityOf(meetParams().b), w=(g,what)=>g?`From ${bN}: ${what} ${Math.abs(g)} day${Math.abs(g)>1?'s':''} ${g>0?'later':'earlier'}`:'';
+  return [w(c.gapOut,'arrive'),w(c.gapBack,'fly home')].filter(Boolean).join(' · '); }
+const meetCity=c=>`${H.flag((AP.byCode(c.dest)||{}).cc)} ${H.esc(H.cityOf(c.dest))} <span title="${H.esc(VISA.info(c.dest).label)}">${VISA.info(c.dest).icon}</span>`;
+const meetSpan=c=>{ const f=c.a.out.day>c.b.out.day?c.a.out.day:c.b.out.day, t=c.a.back.day<c.b.back.day?c.a.back.day:c.b.back.day;
+  return `${c.together} night${c.together>1?'s':''} together · ${H.short(H.parse(f))} – ${H.short(H.parse(t))}`; };
+function meetFiltered(){
+  if(!meet.res) return [];
+  const q=AP.norm($('#meetQ').value.trim()), g=$('#meetGap').value, max=parseFloat($('#meetMax').value);
+  return meet.res.results.filter(c=>VISA.pass(c.dest)&&(g===''||(Math.abs(c.gapOut)<=+g&&Math.abs(c.gapBack)<=+g))&&(isNaN(max)||c.total<=max)
+    &&(!q||AP.norm(H.cityOf(c.dest)+' '+((AP.byCode(c.dest)||{}).country||'')+' '+c.dest).includes(q)));
+}
+function renderMeet(){
+  const p=meetParams(), aN=H.cityOf(p.a), bN=p.b?H.cityOf(p.b):'your friend', anyD=!p.to||p.to==='ANY';
+  $('#meetTitle').textContent=`${aN} + ${p.b?bN:'?'} → ${anyD?'?':H.cityOf(p.to)}`;
+  $('#meetSub').innerHTML=`From <b>${H.esc(aN)}</b> and <b>${H.esc(bN)}</b>, you meet ${anyD?'in the cheapest cities you can both reach with a direct flight':`in <b>${H.esc(H.cityOf(p.to))}</b>`} around ${H.short(H.parse(p.start))} and each flies home around ${H.short(H.parse(p.end))}. Same days first${p.flex?`, then up to ${p.flex} day${p.flex>1?'s':''} apart`:''}. Prices per person.`;
+  const box=(cls,txt)=>{ $('#meetPicks').innerHTML=`<div class="${cls}" style="grid-column:1/-1">${H.esc(txt)}</div>`; $('#meetList').innerHTML=''; };
+  if(meet.loading) return box('loading',meet.msg);
+  if(meet.err) return box('empty',meet.err);
+  if(!meet.res) return box('empty','Press Search to find plans.');
+  const base=meet.res.results.filter(c=>VISA.pass(c.dest));
+  if(!base.length) return box('empty',`${meet.res.note?meet.res.note+' ':''}${meet.res.results.length?'Every plan was hidden by the visa filter. ':''}No plans fit these dates. Try more flexibility (± 2), other dates${anyD?'':', or 🌍 Anywhere as the meeting place'}.`);
+  // picks: cheapest on the same days, cheapest overall, then the cheapest same-day plan in another city
+  const byPrice=[...base].sort((x,y)=>x.total-y.total), same=byPrice.filter(c=>!c.gap), picks=[], labels=[];
+  if(same[0]){ picks.push(same[0]); labels.push('Same days, cheapest'); }
+  if(byPrice[0]!==same[0]){ picks.push(byPrice[0]); labels.push('Cheapest overall'); }
+  const other=same.find(c=>!picks.some(q=>q.dest===c.dest)); if(other){ picks.push(other); labels.push('Same days, another city'); }
+  $('#meetPicks').innerHTML=picks.map((c,i)=>`<div class="pick"><span class="rank">#${i+1}</span><span class="badge ${c.gap?'b-good':'b-great'}">${labels[i]}</span>
+      <h3>${meetCity(c)}</h3><div class="meta">${H.esc(meetGapText(c))}<br>${meetSpan(c)}</div>
+      <div class="price">${priceFmt(c.total,c.cur)}<span class="hint"> total, 4 flights</span></div><div class="meta">${meetSplit(c)}</div>
+      <div class="mc-legs">${meetLegs(c)}</div></div>`).join('');
+  renderMeetList();
+}
+function renderMeetList(){
+  const L=meetFiltered();
+  if(!L.length){ $('#meetList').innerHTML='<div class="empty">Nothing matches these filters.</div>'; return; }
+  $('#meetList').innerHTML=`<p class="hint">${L.length} plan${L.length>1?'s':''}</p>`+L.slice(0,60).map(c=>`<div class="deal mc-row">
+      <div style="grid-column:1/3"><b>${meetCity(c)}</b> · ${H.esc(meetGapText(c))}<div class="mc-legs compact">${meetLegs(c)}</div></div>
+      <div class="amt">${priceFmt(c.total,c.cur)}<small>total<br>${meetSplit(c)}<br>${meetSpan(c)}</small></div></div>`).join('');
+}
+
+/* =====================================================================
    FARE CALENDAR — week strip / month grid with the lowest fare per day
    ===================================================================== */
 const cal={view:H.load('calView','week'),route:'',outAnchor:null,backAnchor:null,outMonth:null,backMonth:null,data:{},loaded:new Set(),pending:new Set(),failed:new Set()};
@@ -679,14 +816,29 @@ function stopOthers(keep){
   if(keep!=='any'&&any.loading){ NET.cancel('any'); any.key=''; any.loading=false; }
   if(keep!=='live'&&live.loading){ NET.cancel('live'); live.key=''; live.loading=false; }
   if(keep!=='mc'&&mc.loading){ NET.cancel('mc'); mc.key=''; mc.loading=false; }
+  if(keep!=='meet'&&meet.loading){ NET.cancel('meet'); meet.key=''; meet.loading=false; }
+  if(keep!=='legs'&&mine.loading){ NET.cancel('legs'); mine.key=''; mine.loading=false; }
 }
 /* forget the last searches, so the next render asks again (cached answers still make it quick) */
-function searchAgain(){ any.key=''; live.key=''; mc.key=''; cal.failed.clear(); }
+function searchAgain(){ any.key=''; live.key=''; mc.key=''; meet.key=''; mine.key=''; cal.failed.clear(); }
 const quiet=e=>{ if(!/cancelled/.test(e&&e.message)) console.warn(e); };   // a superseded search is not an error
 function render(){
   T=H.trip(); flex=T.flex; tripType=T.tripType;
-  const isMc=T.tripType==='mc'||isVia(T.tripType);
-  $('#multiMode').classList.toggle('hidden',!isMc);
+  const isMc=T.tripType==='mc'||isVia(T.tripType), isMeet=T.tripType==='meet';
+  $('#multiMode').classList.toggle('hidden',!isMc); $('#meetMode').classList.toggle('hidden',!isMeet); $('#legsMode').classList.toggle('hidden',T.tripType!=='legs');
+  if(T.tripType==='legs'){
+    $('#anyMode').classList.add('hidden'); $('#routeMode').classList.add('hidden');
+    const L=T.legs||[];
+    $('#routeTitle').innerHTML=L.length?L.map(l=>`${H.esc(H.cityOf(l.from))} <em>→</em> ${H.esc(H.cityOf(l.to))}`).join('<em>,</em> '):'Your own <em>flights</em>';
+    $('#routeSub').textContent=`${H.nice(H.parse(T.start))} – ${H.nice(H.parse(T.end))} · ±${T.flex} days · ${L.length} flight${L.length===1?'':'s'}`;
+    stopOthers('legs'); renderLegs(); loadLegs().catch(quiet); return;
+  }
+  if(isMeet){
+    $('#anyMode').classList.add('hidden'); $('#routeMode').classList.add('hidden');
+    $('#routeTitle').innerHTML=`${H.esc(H.cityOf(T.from))} <em>+</em> ${H.esc(T.meetFrom?H.cityOf(T.meetFrom):'friend')} <em>→</em> ${T.to&&T.to!=='ANY'?H.esc(H.cityOf(T.to)):'anywhere 🌍'}`;
+    $('#routeSub').textContent=`${H.nice(H.parse(T.start))} – ${H.nice(H.parse(T.end))} · ±${T.flex} days · each flies home`;
+    stopOthers('meet'); renderMeet(); loadMeet().catch(quiet); return;
+  }
   if(isMc){
     $('#anyMode').classList.add('hidden'); $('#routeMode').classList.add('hidden');
     $('#routeTitle').innerHTML=isVia(T.tripType)?`${H.esc(H.cityOf(T.from))} <em>→ ? →</em> ${H.esc(T.viaLast?H.cityOf(T.viaLast):'last stop')} <em>→</em> ${T.tripType==='open'?H.esc(T.viaEnd?H.cityOf(T.viaEnd):'B'):'home'}`:`${H.esc(H.cityOf(T.from))} <em>→ ${T.mcCities||2} cit${(T.mcCities||2)===1?'y':'ies'} →</em> home`;
@@ -707,8 +859,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   Object.assign(patch,H.urlPatch(qp));
   if(patch.to) patch.city=H.hotelCity(patch.to);
   if(/^(week|month)$/.test(qp.get('cal')||'')) cal.view=qp.get('cal');
-  if(/^(rt|ow|mc|via|open)$/.test(qp.get('trip')||'')) patch.tripType=qp.get('trip');
+  if(/^(rt|ow|mc|via|open|meet|legs)$/.test(qp.get('trip')||'')) patch.tripType=qp.get('trip');
   { const fin=String(qp.get('finish')||'').toUpperCase(); if(AP.byCode(fin)) patch.viaEnd=fin; }   // ?trip=open&finish=IST
+  { const fr=String(qp.get('friend')||'').toUpperCase(); if(AP.byCode(fr)) patch.meetFrom=fr; }   // ?trip=meet&friend=BER
   if(qp.get('visa')) patch.visaSel=qp.get('visa').split(',').filter(k=>VISA.ALL.includes(k));
   if(Object.keys(patch).length) H.setTrip(patch);
   const f=$('#f'); T=H.trip(); flex=T.flex; tripType=T.tripType;
@@ -726,7 +879,20 @@ document.addEventListener('DOMContentLoaded',()=>{
     $('#viaLastLbl').textContent=openOn?'Last stop':'Last stop, then home'; $('#mcMustLbl').parentNode.style.display=viaOn?'none':'';
     f.nearby.closest('label').style.visibility=(mcOn||viaOn)?'hidden':'';
     f.budget.closest('label').style.display=(mcOn||viaOn)?'none':'';   // the budget applies to Anywhere and country searches
-    $('#mcStopsWrap').style.display=viaOn?'':'none'; $('#mcCitiesWrap').style.display=viaOn?'none':''; };
+    $('#mcStopsWrap').style.display=viaOn?'':'none'; $('#mcCitiesWrap').style.display=viaOn?'none':'';
+    // meet-up: you + a friend's home city, "To" is where you meet (or Anywhere); each flies home
+    const meetOn=tripType==='meet', toL=f.to.closest('label');
+    document.querySelectorAll('.meet-only').forEach(el=>el.style.display=meetOn?'':'none');
+    toL.classList.toggle('span-2',meetOn); toL.classList.toggle('span-3',!meetOn);
+    $('#fromLbl').textContent=meetOn?'You fly from':'From'; $('#toLbl').textContent=meetOn?'Meet in':'To';
+    // my flights: the list of flights replaces From and To
+    const legsOn=tripType==='legs';
+    document.querySelectorAll('.legs-only').forEach(el=>el.style.display=legsOn?'':'none');
+    $('#startLbl').textContent=legsOn?'First flight around':'Leave around'; $('#endLbl').textContent=legsOn?'Last flight around':'Come back around';
+    if(legsOn){ f.from.closest('label').style.display='none'; toL.style.display='none'; $('#swap').style.display='none'; $('#endWrap').style.display='';
+      f.nearby.closest('label').style.visibility='hidden'; f.budget.closest('label').style.display='none'; f.minNights.closest('label').style.display='none'; }
+    else { f.from.closest('label').style.display=''; f.minNights.closest('label').style.display=''; }
+    if(meetOn){ $('#swap').style.display='none'; $('#endWrap').style.display=''; f.nearby.closest('label').style.visibility='hidden'; f.budget.closest('label').style.display='none'; } };
   pills.forEach(b=>b.onclick=()=>{flex=+b.dataset.v;paint();submit();});
   segs.forEach(b=>b.onclick=()=>{tripType=b.dataset.v;paint();submit();});
   paint();
@@ -735,12 +901,32 @@ document.addEventListener('DOMContentLoaded',()=>{
   f.start.onchange=()=>{ if(f.end.value<=f.start.value) f.end.value=H.fmt(H.add(H.parse(f.start.value),7)); };
   /* force=true (the Search button): search again even when nothing changed, e.g. after a failed or stuck search */
   function submit(force){
+    if(tripType==='legs'){
+      // switching to the tab with no flight typed yet: show the empty state, no warning
+      if(force!==true&&!readLegRows().some(l=>l.from&&l.to)){ H.setTrip({tripType,legs:[]}); render(); return; }
+      const legs=readLegs(); if(!legs) return;
+      if(!f.start.value||f.start.value<H.fmt(new Date())){ H.toast('Pick a first-flight date from today on'); f.start.focus(); return; }
+      if(legs.length>1&&f.end.value<=f.start.value){ H.toast('The last flight must be after the first one'); f.end.focus(); return; }
+      H.setTrip({legs,legGap:(g=>Number.isFinite(g)?Math.max(0,Math.min(14,g)):1)(parseInt($('#legGap').value,10)),start:f.start.value,end:f.end.value||f.start.value,flex,tripType,
+        adults:+f.adults.value||1,children:+f.children.value||0,cabin:f.cabin.value,currency:f.currency.value,direct:f.direct.checked});
+      selected=null; $('#detail').classList.remove('show'); if(force===true) searchAgain(); render(); return;
+    }
     const from=H.codeOf(f.from), to=H.codeOf(f.to);
     if(!from){ H.toast('Pick where you fly from, or choose 🌍 Anywhere'); f.from.focus(); return; }
     if(from==='ANY'&&(to==='ANY'||tripType==='mc')){ H.toast(tripType==='mc'?'Multi-city needs a home airport (e.g. NUE)':'Pick a city or country on at least one side'); f.from.focus(); return; }
     if(isVia(tripType)&&(from==='ANY'||H.isCountry(from))){ H.toast('Pick your home airport in From (e.g. NUE)'); f.from.focus(); return; }
+    let meetPatch={};
+    if(tripType==='meet'){
+      const mf=$('#meetFrom').value.trim()?H.codeOf($('#meetFrom')):'';
+      if(from==='ANY'||H.isCountry(from)){ H.toast('Pick your home airport in "You fly from" (e.g. NUE)'); f.from.focus(); return; }
+      if(!mf||mf==='ANY'||H.isCountry(mf)){ H.toast("Pick your friend's home airport (e.g. Berlin)"); $('#meetFrom').focus(); return; }
+      if(mf===from){ H.toast('Your friend flies from a different city than you'); $('#meetFrom').focus(); return; }
+      if(to&&(to===from||to===mf)){ H.toast('Meet somewhere other than your two home cities'); f.to.focus(); return; }
+      if(to&&H.isCountry(to)){ H.toast('Meet in a city, or choose 🌍 Anywhere'); f.to.focus(); return; }
+      meetPatch={meetFrom:mf};
+    }
     if(tripType==='mc'&&H.isCountry(from)){ H.toast('Multi-city needs a home airport (e.g. NUE), not a whole country'); f.from.focus(); return; }
-    if(!to&&tripType!=='mc'){ H.toast('Pick a destination, or choose 🌍 Anywhere'); f.to.focus(); return; }
+    if(!to&&tripType!=='mc'&&tripType!=='meet'){ H.toast('Pick a destination, or choose 🌍 Anywhere'); f.to.focus(); return; }
     if(!f.start.value||f.start.value<H.fmt(new Date())){ H.toast('Pick a departure date from today on'); f.start.focus(); return; }
     if(tripType!=='ow'&&f.end.value<=f.start.value){ H.toast('Return must be after departure'); return; }
     let viaPatch={};
@@ -751,7 +937,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       viaPatch={viaMid:vm&&vm!=='ANY'?vm:null,viaLast:vl};
       if(tripType==='open'){ const ve=endCode(); if(!ve) return; if(ve===vl){ H.toast('B must be different from the last stop'); $('#viaEnd').focus(); return; } viaPatch.viaEnd=ve; }
     }
-    H.setTrip({...viaPatch,from,to:to||T.to,city:H.hotelCity(to||T.to),start:f.start.value,end:f.end.value,flex,tripType,nearby:f.nearby.checked,
+    H.setTrip({...viaPatch,...meetPatch,from,to:tripType==='meet'?(to||'ANY'):(to||T.to),city:H.hotelCity(to||T.to),start:f.start.value,end:f.end.value,flex,tripType,nearby:f.nearby.checked,
       adults:+f.adults.value||1,children:+f.children.value||0,cabin:f.cabin.value,currency:f.currency.value,minNights:+f.minNights.value||0,budget:Math.max(0,+f.budget.value||0),direct:f.direct.checked});
     selected=null; $('#detail').classList.remove('show'); if(force===true) searchAgain(); render();
   }
@@ -778,6 +964,12 @@ document.addEventListener('DOMContentLoaded',()=>{
   // multi-city controls
   setAirport($('#viaMid'),T.viaMid||'ANY');
   if(T.viaEnd) setAirport($('#viaEnd'),T.viaEnd);
+  if(T.meetFrom) setAirport($('#meetFrom'),T.meetFrom);
+  renderLegRows(T.legs&&T.legs.length?T.legs:[{from:T.from!=='ANY'?T.from:''},{}]); $('#legGap').value=T.legGap==null?1:T.legGap;
+  $('#legAdd').onclick=()=>{ const cur=readLegRows(), last=cur[cur.length-1]; if(cur.length>=8){ H.toast('Up to 8 flights'); return; }
+    renderLegRows([...cur,{from:last&&last.to||''}]); const ins=document.querySelectorAll('#legRows .leg-row:last-child input'); (ins[0].value?ins[1]:ins[0]).focus(); };
+  $('#meetFrom').addEventListener('change',()=>{ if(tripType==='meet'&&$('#meetFrom').value.trim()) submit(); });
+  ['#meetQ','#meetGap','#meetMax'].forEach(s=>$(s).addEventListener('input',()=>{ if(!meet.loading&&meet.res) renderMeetList(); }));
   if(!T.viaLast&&T.to&&T.to!=='ANY'&&T.to!==T.from) H.setTrip({viaLast:T.to}); if(H.trip().viaLast) setAirport($('#viaLast'),H.trip().viaLast);
   $('#mcStops').value=T.mcStops||1; $('#mcCities').value=T.mcCities||2; $('#mcMin').value=T.mcMin||3; $('#mcMax').value=T.mcMax||5; if(T.mcMust) setAirport($('#mcMust'),T.mcMust);
   $('#mcGo').onclick=()=>{ const mn=Math.max(1,+$('#mcMin').value||3), mx=Math.max(mn,+$('#mcMax').value||mn);

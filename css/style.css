@@ -689,3 +689,10 @@ html[data-theme="dark"] .hero.photo{background-color:#000;background-image:var(-
   .day.low::after{content:"★";letter-spacing:0} /* neighbouring "Lowest" badges no longer overlap */
   .filters label.f:has(input[data-ac]){flex-basis:100%}  /* a place field gets its own row, so its suggestions fit on screen */
 }
+/* My flights: the list of flights the user picked */
+.leg-rows{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.leg-row{display:grid;grid-template-columns:28px 1fr 1fr 170px 36px;gap:8px;align-items:center}
+.leg-row .n{width:24px;height:24px;border-radius:50%;background:var(--ocean);color:#fff;display:grid;place-items:center;font-size:.72rem;font-weight:700}
+.leg-row .x{height:36px;border-radius:10px}
+.leg-ground{font-size:.84rem;color:var(--ink-soft);padding:2px 0 2px 30px}
+@media (max-width:760px){.leg-row{grid-template-columns:24px 1fr 36px}.leg-row input:not(:first-of-type){grid-column:2}}
