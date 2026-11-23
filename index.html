@@ -39,38 +39,48 @@
       <h2 style="margin:0"><span class="ico">🧭</span>Your trip</h2><span class="spacer"></span>
       <div class="seg" id="tripType"><button type="button" data-v="rt">Round trip</button><button type="button" data-v="ow">One way</button><button type="button" data-v="mc">🔀 Multi-city</button><button type="button" data-v="via">🧭 ? → Last stop → Home</button><button type="button" data-v="open">🛬 ? → Last stop → B</button><button type="button" data-v="meet">👥 Meet up</button><button type="button" data-v="legs">✈️ My flights</button></div>
     </div>
-    <form id="f" class="grid g-search">
-      <label class="f span-3"><span id="fromLbl">From</span><input name="from" data-ac data-anywhere required placeholder="City, airport, code or Anywhere"></label>
-      <button type="button" class="swap" id="swap" title="Swap" style="grid-column:span 1">⇄</button>
-      <label class="f span-2 meet-only">Friend flies from<input id="meetFrom" data-ac placeholder="e.g. Berlin"></label>
-      <label class="f span-3"><span id="toLbl">To</span><input name="to" data-ac data-anywhere required placeholder="Anywhere, or a city"></label>
-      <label class="f span-2 via-only">Via<input id="viaMid" data-ac data-anywhere placeholder="🌍 Anywhere"></label>
-      <label class="f span-2 via-only"><span id="viaLastLbl">Last stop, then home</span><input id="viaLast" data-ac placeholder="e.g. Mallorca"></label>
-      <label class="f span-2 open-only">Finish at (B)<input id="viaEnd" data-ac placeholder="e.g. Istanbul"></label>
-      <div class="f span-12 legs-only"><span class="lbl">Your flights, in order (they don't have to connect: cover a gap by train or bus)</span>
+    <form id="f" class="fsearch">
+      <div class="f legs-only"><span class="lbl">Your flights, in order (they don't have to connect: cover a gap by train or bus)</span>
         <div id="legRows" class="leg-rows"></div>
         <div class="row" style="gap:12px;margin-top:8px"><button type="button" class="btn ghost sm" id="legAdd">+ Add flight</button>
           <label class="f" style="flex-direction:row;align-items:center;gap:8px;margin:0">Nights between flights, at least<input id="legGap" type="number" min="0" max="14" style="width:70px"></label></div></div>
-      <label class="f span-2"><span id="startLbl">Leave around</span><input type="date" name="start" required></label>
-      <label class="f span-3" id="endWrap"><span id="endLbl">Come back around</span><input type="date" name="end"></label>
-      <label class="f span-6">Flexibility (days before &amp; after)
-        <div class="flex-pills" id="flexPills">
-          <button type="button" data-v="0">Exact</button><button type="button" data-v="1">± 1</button><button type="button" data-v="2">± 2</button>
-          <button type="button" data-v="3">± 3</button><button type="button" data-v="4">± 4</button></div></label>
-      <label class="f span-2">Adults<input type="number" name="adults" min="1" max="9"></label>
-      <label class="f span-2">Children<input type="number" name="children" min="0" max="8"></label>
-      <label class="f span-2">Cabin<select name="cabin">
-        <option value="economy">Economy</option><option value="premium_economy">Premium eco.</option>
-        <option value="business">Business</option><option value="first">First</option></select></label>
-      <label class="f span-2">Currency<select name="currency">
-        <option>EUR</option><option>GBP</option><option>PLN</option><option>HUF</option><option>CZK</option><option>SEK</option><option>DKK</option><option>NOK</option><option>USD</option><option>TRY</option></select></label>
-      <label class="f span-2">Shortest stay<input type="number" name="minNights" min="1" max="60" placeholder="any"></label>
-      <label class="f span-2" title="Flight + stay for everyone. Used when the destination is Anywhere or a country">Trip budget<input type="number" name="budget" min="0" step="50" placeholder="any"></label>
-      <div class="f span-3 lbl">🛂 Visa (Turkish passport)<div id="visaMs"></div></div>
-      <div class="f span-3 lbl">✈️ Airlines<div id="alMs"></div></div>
-      <label class="check span-5" style="align-self:end;padding-bottom:12px"><input type="checkbox" name="nearby"> Also search nearby airports (≤ 250 km)</label>
-      <label class="check span-6" style="align-self:center"><input type="checkbox" name="direct"> Direct flights only</label>
-      <div class="span-6 row end" style="align-self:end">
+      <!-- where and when: each tab shows only its own fields, the row closes up around them -->
+      <div class="frow">
+        <label class="f w-place w-from"><span id="fromLbl">From</span><input name="from" data-ac data-anywhere required placeholder="City, airport, code or Anywhere"></label>
+        <button type="button" class="swap" id="swap" title="Swap">⇄</button>
+        <label class="f w-place meet-only">Friend flies from<input id="meetFrom" data-ac placeholder="e.g. Berlin"></label>
+        <label class="f w-place"><span id="toLbl">To</span><input name="to" data-ac data-anywhere required placeholder="Anywhere, or a city"></label>
+        <label class="f w-place via-only">Via<input id="viaMid" data-ac data-anywhere placeholder="🌍 Anywhere"></label>
+        <label class="f w-place via-only"><span id="viaLastLbl">Last stop, then home</span><input id="viaLast" data-ac placeholder="e.g. Mallorca"></label>
+        <label class="f w-place open-only">Finish at (B)<input id="viaEnd" data-ac placeholder="e.g. Istanbul"></label>
+        <label class="f w-date"><span id="startLbl">Leave around</span><input type="date" name="start" required></label>
+        <label class="f w-date" id="endWrap"><span id="endLbl">Come back around</span><input type="date" name="end"></label>
+      </div>
+      <!-- how flexible, and who travels -->
+      <div class="frow">
+        <label class="f w-flex">Flexibility (days before &amp; after)
+          <div class="flex-pills" id="flexPills">
+            <button type="button" data-v="0">Exact</button><button type="button" data-v="1">± 1</button><button type="button" data-v="2">± 2</button>
+            <button type="button" data-v="3">± 3</button><button type="button" data-v="4">± 4</button></div></label>
+        <label class="f w-small">Adults<input type="number" name="adults" min="1" max="9"></label>
+        <label class="f w-small">Children<input type="number" name="children" min="0" max="8"></label>
+        <label class="f w-small">Cabin<select name="cabin">
+          <option value="economy">Economy</option><option value="premium_economy">Premium eco.</option>
+          <option value="business">Business</option><option value="first">First</option></select></label>
+      </div>
+      <!-- filters -->
+      <div class="frow">
+        <label class="f w-small">Currency<select name="currency">
+          <option>EUR</option><option>GBP</option><option>PLN</option><option>HUF</option><option>CZK</option><option>SEK</option><option>DKK</option><option>NOK</option><option>USD</option><option>TRY</option></select></label>
+        <label class="f w-small">Shortest stay<input type="number" name="minNights" min="1" max="60" placeholder="any"></label>
+        <label class="f w-small" title="Flight + stay for everyone. Used when the destination is Anywhere or a country">Trip budget<input type="number" name="budget" min="0" step="50" placeholder="any"></label>
+        <div class="f w-ms lbl">🛂 Visa (Turkish passport)<div id="visaMs"></div></div>
+        <div class="f w-ms lbl">✈️ Airlines<div id="alMs"></div></div>
+      </div>
+      <!-- options on the left, Search always at the right end -->
+      <div class="frow foot">
+        <label class="check"><input type="checkbox" name="nearby"> Also search nearby airports (≤ 250 km)</label>
+        <label class="check"><input type="checkbox" name="direct"> Direct flights only</label>
         <button class="btn primary" type="submit">Search 🌅</button>
       </div>
     </form>

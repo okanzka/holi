@@ -133,6 +133,20 @@ main{position:relative;z-index:3}
 .g-search{grid-template-columns:repeat(12,1fr)}
 .span-5{grid-column:span 5}.span-8{grid-column:span 8}
 .span-2{grid-column:span 2}.span-3{grid-column:span 3}.span-4{grid-column:span 4}.span-6{grid-column:span 6}.span-12{grid-column:span 12}
+.g-end{grid-column:-3/-1}   /* a Search button: always the last two columns of its row, whatever the fields before it */
+/* flights form: rows that close up around the fields a tab hides (no holes, nothing pushed to a stray line) */
+.fsearch{display:flex;flex-direction:column;gap:14px}
+.frow{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start}   /* labels line up at the top */
+.frow > *{min-width:0}
+.frow .w-place{flex:1.6 1 130px}
+.frow .w-from{flex:2.4 1 200px}                    /* "NUE — Nuremberg, Germany" fits */
+.frow .w-date{flex:1 1 160px;max-width:240px}   /* "23-Dec-2026" and the calendar icon fit */
+.frow .w-flex{flex:2.2 1 300px}
+.frow .w-small{flex:1 1 100px}
+.frow .w-ms{flex:1.6 1 170px}
+.frow .swap{flex:0 0 52px;align-self:flex-end}
+.frow.foot{align-items:center;gap:6px 24px}
+.frow.foot .btn{margin-left:auto}
 
 /* ---------- fields: filled, no heavy borders ---------- */
 label.f{display:flex;flex-direction:column;gap:6px;font-size:.8rem;font-weight:600;letter-spacing:-.005em;color:var(--ink-soft)}
@@ -276,6 +290,15 @@ footer .s{font:700 1.3rem/1.4 var(--font-d);letter-spacing:-.03em;color:#fff}
   .g-search{grid-template-columns:repeat(6,1fr)}
   .span-2,.span-3,.span-4,.span-5{grid-column:span 3}
   .span-6,.span-12{grid-column:span 6}
+  /* tablet: places two to a line, the two dates together on the next */
+  .frow .w-place,.frow .w-from{flex-basis:260px}
+  .frow .w-date{flex-basis:200px;max-width:none}
+  /* tablet: menu labels stay on one line */
+  .nav ul a.link{white-space:nowrap;padding:7px 10px}
+  /* flights trip type: wraps onto a second line as whole words instead of breaking "Multi-/city" */
+  #tripType{display:flex;flex-wrap:wrap;width:100%;border-radius:16px}
+  #tripType button{flex:1 1 auto;white-space:nowrap;border-radius:13px}
+  #tripType .seg-thumb{border-radius:13px}
 }
 @media (max-width:560px){
   .wrap{padding:0 16px}
@@ -303,15 +326,16 @@ footer .s{font:700 1.3rem/1.4 var(--font-d);letter-spacing:-.03em;color:#fff}
   /* flights trip type: 2×2 grid instead of a squeezed pill */
   #tripType{display:grid;grid-template-columns:1fr 1fr;width:100%;border-radius:16px}
   #tripType button,#tripType .seg-thumb{border-radius:13px}
-  #tripType button{padding:10px 8px;line-height:1.2}
+  #tripType button{padding:10px 8px;line-height:1.2;white-space:normal}
   #tripType button:last-of-type:nth-of-type(odd){grid-column:1/-1}   /* an odd last option fills its row */
   /* deal rows: price gets its own line */
   .deal{gap:10px 14px}
   .deal .amt{grid-column:1/-1}
   /* iOS Safari zooms (and the page slides sideways) when a field under 16px is focused */
   input,select,textarea{font-size:16px}
-  /* a hidden-but-reserved checkbox (multi-city / via modes) leaves a blank row in the single column */
-  .g-search label.check[style*="visibility: hidden"]{display:none}
+  /* flights form: one field per line, the swap button small and centred between From and To */
+  .frow > *{flex:1 1 100% !important;max-width:none !important}
+  .frow .swap{flex:0 0 44px !important;margin:-6px auto;height:40px;rotate:90deg}
 }
 /* never let anything pan the page sideways on touch screens (clip keeps the sticky nav working, unlike hidden) */
 html,body{overflow-x:clip;max-width:100%}

@@ -281,3 +281,29 @@ test('every page script parses (a broken flights.js would leave the page dead)',
   for (const f of fs.readdirSync(path.join(__dirname, '..', 'js')).filter(f => f.endsWith('.js')))
     assert.doesNotThrow(() => new vm.Script(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), { filename: f }), f);
 });
+
+/* Pressing Search again restarts the same search: the cancelled first run must not put
+   "Could not load flights" on the screen of the second one (multi-city, meet up, my flights). */
+test('a search cancelled by the same search again does not show an error', async () => {
+  const fs = require('fs'), vm = require('vm');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'flights.js'), 'utf8');
+  const fn = name => src.slice(src.indexOf(`async function ${name}(`)).match(/^[\s\S]*?\n}\n/)[0];
+  const cases = [['loadMulti', 'mc', 'MULTI', 'renderMulti', 'mcParams'], ['loadMeet', 'meet', 'MEET', 'renderMeet', 'meetParams'], ['loadLegs', 'mine', 'LEGS', 'renderLegs', 'legsParams']];
+  for (const [name, state, api, render, params] of cases) {
+    const ctx = { T: { tripType: 'mc' }, isVia: () => false, NET: null, [render]: () => {}, [params]: () => ({ a: 1, b: 'BER', legs: [1], mode: 'mc' }),
+      MULTI: null, MEET: null, LEGS: null, AbortController, setTimeout, Promise, Error };
+    vm.createContext(ctx);
+    vm.runInContext(`var ${state}={key:'',res:null,loading:false,msg:'',err:null};
+      const NET={_c:{},begin(ch){ if(this._c[ch]) this._c[ch].abort(); return (this._c[ch]=new AbortController()).signal; }};
+      let calls=0;
+      ${api}={ viaLoop(){}, search({signal}){ const n=++calls; return new Promise((ok,no)=>{
+        if(n===1) signal.addEventListener('abort',()=>setTimeout(()=>no(new Error('cancelled')),0));
+        else setTimeout(()=>ok({packages:[],missing:[],routes:[]}),5); }); } };
+      ${fn(name)}
+      this.run=async()=>{ const first=${name}(); ${state}.key=''; const second=${name}(); await Promise.all([first,second]); return ${state}; };`, ctx);
+    const s = await ctx.run();
+    assert.strictEqual(s.err, null, name + ' shows an error');
+    assert.ok(s.res, name + ' has the result');
+    assert.strictEqual(s.loading, false, name);
+  }
+});
