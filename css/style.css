@@ -78,7 +78,7 @@ h2{line-height:1.15;letter-spacing:-.025em}
 h3{line-height:1.2;letter-spacing:-.018em}
 ::selection{background:var(--accent-tint)}
 :focus-visible{outline:3px solid color-mix(in srgb,var(--ocean) 55%,transparent);outline-offset:2px}
-.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+.wrap{max-width:1440px;margin:0 auto;padding:0 32px}
 button{-webkit-user-select:none;user-select:none;touch-action:manipulation}
 
 /* ---------- nav: floating translucent material ---------- */
@@ -703,7 +703,7 @@ html[data-theme="dark"] .hero.photo{background-color:#000;background-image:var(-
     --scrim:linear-gradient(180deg,rgba(6,22,40,.62),rgba(6,22,40,.5) 60%,rgba(6,22,40,.7))}
 }
 /* inner pages use the home hero exactly: same photo, same height, same type position */
-.hero.small.photo{min-height:725px;padding-top:144px;box-sizing:border-box}
+.hero.small.photo{min-height:480px;padding-top:144px;box-sizing:border-box}
 @media (max-width:560px){.hero.small.photo{min-height:440px;padding-top:104px}}   /* phone: the trip card shows on the first screen */
 @media (max-width:380px){.nav ul a.link span{display:none}.nav ul a.link{padding:6px 9px}}
 
