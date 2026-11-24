@@ -146,7 +146,17 @@ const STAYS = {
 /* ---------- the step-by-step wizard on the hotels page ---------- */
 function renderStayWizard(box){
   const P=STAYS.plan();
-  if(!P){ box.classList.add('hidden'); return; }
+  if(!P){
+    if(!COSTS.list().length){ box.classList.add('hidden'); return; }
+    const t=H.trip(), pax=(t.adults||1)+(t.children||0), G=COSTS.sum(t.currency,pax);
+    box.classList.remove('hidden');
+    box.innerHTML=`<div class="row"><h2 style="margin:0"><span class="ico">🧾</span>Trip cost</h2></div>
+      <p class="sub" style="margin-top:6px">Buses, trains and other costs you added. Plan stays with 🏨 on a flight to see flights and stays here too.</p>
+      ${costsBlock(G,t.currency)}
+      <div class="st-total"><div class="grand"><small>Total</small><b>${H.money(G.total,t.currency)}</b><span>${H.money(G.total/pax,t.currency)} per person</span></div></div>`;
+    wireCosts(box,t.currency,()=>renderStayWizard(box));
+    return;
+  }
   box.classList.remove('hidden');
   const title=document.getElementById('title');
   // only when the stay planner was opened on purpose; a plain hotel search keeps its own city in the title
@@ -171,16 +181,18 @@ function renderStayWizard(box){
         <form class="row" id="stManual"><input name="name" placeholder="Place name" required style="flex:2;min-width:180px"><input name="total" type="number" min="0" step="1" placeholder="Total for ${c.nights} nights" required style="flex:1;min-width:150px"><input name="link" type="url" placeholder="Link (optional)" style="flex:2;min-width:180px"><button class="btn primary sm">Use this</button></form>
         <p class="hint" style="margin-top:8px"><a href="#" id="stSkip">No booking needed here (friends, night bus…) → skip</a></p></div>`;
   }else{
-    const stays=P.picks.reduce((s,p)=>s+(p?p.total:0),0), fl=P.flightPP?P.flightPP*pax:null;
+    const stays=P.picks.reduce((s,p)=>s+(p?p.total:0),0), fl=P.flightPP?P.flightPP*pax:null, G=COSTS.sum(P.cur,pax), all=stays+G.total+(fl||0);
     body=`<h3>Your trip, all costs</h3>
       <div class="list">${P.cities.map((c,i)=>{ const p=P.picks[i];
         return `<div class="item${p?'':' missing'}"><div><div class="t">${H.flag(c.cc)} ${H.esc(c.city)} · ${c.nights} night${c.nights>1?'s':''}</div>
           <div class="s">${p?`${p.total===0&&!p.link?'🚌 No booking':p.manual?'🏠 Your pick':p.hostel?'🛏️ Hostel':'🏨 Hotel'} ·${p.link?`<a href="${H.esc(p.link)}" target="_blank" rel="noopener">${H.esc(p.name)} ↗</a>`:H.esc(p.name)}${p.rating?` · ⭐ ${(+p.rating).toFixed(1)}`:''}`:'Not chosen yet'} · ${H.short(H.parse(c.ci))} → ${H.short(H.parse(c.co))}</div></div>
           <div class="row"><span class="amt">${p?money(p.total):'—'}</span><button class="btn ghost sm" data-step="${i}">${p?'Change':'Choose'}</button></div></div>`; }).join('')}</div>
+      ${costsBlock(G,P.cur)}
       <div class="st-total">
         <div><small>Stays</small><b>${money(stays)}</b></div>
-        ${fl!=null?`<div><small>Flights (${pax} traveller${pax>1?'s':''})</small><b>${money(fl)}</b></div><div class="grand"><small>Whole trip</small><b>${money(stays+fl)}</b><span>${money((stays+fl)/pax)} per person</span></div>`
-          :`<div class="grand"><small>Per person</small><b>${money(stays/pax)}</b></div>`}
+        ${G.items.length?`<div><small>Buses, trains &amp; other</small><b>${money(G.total)}</b></div>`:''}
+        ${fl!=null?`<div><small>Flights (${pax} traveller${pax>1?'s':''})</small><b>${money(fl)}</b></div>`:''}
+        <div class="grand"><small>${fl!=null||G.items.length?'Whole trip':'Per person'}</small><b>${money(fl!=null||G.items.length?all:all/pax)}</b>${fl!=null||G.items.length?`<span>${money(all/pax)} per person</span>`:''}</div>
       </div>
       <p class="hint">Stay prices are for the whole stay as shown when you chose them; flight prices are from the option you picked. Confirm both when booking.</p>
       <div class="row end" style="margin-top:12px"><a class="btn ocean sm" href="things.html">🎟️ Things to do in ${P.cities.length>1?'these cities':H.esc(P.cities[0].city)} →</a></div>`;
@@ -212,6 +224,7 @@ function renderStayWizard(box){
     box.querySelector('#stSkip').onclick=e=>{ e.preventDefault(); choose({name:'No booking needed',total:0}); };
     fillSuggestions(box.querySelector('#stGrid'),c,P,choose);
   }else{
+    wireCosts(box,P.cur,()=>renderStayWizard(box));
     box.querySelectorAll('[data-booked]').forEach(b=>b.onclick=()=>{ const p=STAYS.plan(), k=b.dataset.booked;
       p.booked=p.booked||{}; if(p.booked[k]) delete p.booked[k]; else p.booked[k]=true; STAYS.save(p); renderStayWizard(box); });
     const all=box.querySelector('#stBookAll');
@@ -219,6 +232,26 @@ function renderStayWizard(box){
       const blocked=H.openLinks(STAYS.bookItems(p).filter(x=>!bk[x.key]).map(x=>x.url));
       H.toast(blocked?`Your browser blocked ${blocked} tab${blocked>1?'s':''}. Allow pop-ups for this page and try again`:'Opened every booking site. Mark each one booked when done ✓'); };
   }
+}
+
+/* buses, trains and other costs: one line each with ✕, and a field to add another (e.g. a transfer) */
+function costsBlock(G,cur){
+  const ic={bus:'🚌',train:'🚆',other:'🧾'};
+  return `<h3 style="margin-top:18px">Buses, trains &amp; other</h3>
+    <div class="list">${G.items.map(c=>`<div class="item"><div><div class="t">${ic[c.kind]||'🧾'} ${H.esc(c.title)}</div>
+        <div class="s">${H.esc(c.sub||'')}${c.pp?`${c.sub?' · ':''}per person`:''}${c.cur!==cur?` · <b>other currency, not in the total</b>`:''}</div></div>
+      <div class="row"><span class="amt">${H.money(c.price,c.cur)}</span><button type="button" class="btn ghost sm" data-cost-del="${H.esc(c.id)}" title="Remove" aria-label="Remove">✕</button></div></div>`).join('')
+      ||'<div class="empty">Nothing yet. Press ➕ Trip cost on a ride on Buses or Trains, or add a cost here.</div>'}</div>
+    <form class="row" id="costAdd" style="margin-top:8px"><input name="title" placeholder="Other cost, e.g. airport transfer" required maxlength="120" style="flex:2;min-width:180px">
+      <input name="price" inputmode="decimal" placeholder="Price for everyone (${H.esc(cur)})" required style="flex:1;min-width:150px"><button class="btn ghost sm">+ Add</button></form>`;
+}
+function wireCosts(box,cur,rerender){
+  box.querySelectorAll('[data-cost-del]').forEach(b=>b.onclick=()=>{ COSTS.remove(b.dataset.costDel); rerender(); });
+  const f=box.querySelector('#costAdd');
+  if(f) f.onsubmit=e=>{ e.preventDefault();
+    const el=f.elements;   // not f.title: that is the form's own title
+    if(!COSTS.add({kind:'other',title:el.title.value,price:el.price.value,cur})){ H.toast('Enter a price, e.g. 49.90'); el.price.focus(); return; }
+    rerender(); };
 }
 
 async function fillSuggestions(grid,c,P,choose){

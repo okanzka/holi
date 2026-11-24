@@ -66,3 +66,39 @@ test('FlixBus reachable places: the price range in the asked currency, and wheth
   assert.strictEqual(r[0].mins, 270);
   assert.ok(r[0].train && r[0].bus);
 });
+
+/* A town picked on the Trains page ("Munich") plans from its main station, not from a point in the city centre
+   (which made the first leg a U-Bahn or a walk). The local name ("München") is asked too. */
+test('trains from a town leave from its main station', async () => {
+  const asked = [], planned = [];
+  const stop = (name, lat, lon, country = 'DE') => ({ type: 'STOP', name, lat, lon, country });
+  const fetch = async url => {
+    const u = new URL(url);
+    if (u.pathname.endsWith('/geocode')) {
+      const q = u.searchParams.get('text'); asked.push(q + '|' + u.searchParams.get('type'));
+      const data = q === 'Munich' && !u.searchParams.get('type')
+        ? [{ type: 'PLACE', name: 'Munich', lat: 48.137, lon: 11.575, country: 'DE', areas: [{ name: 'München', adminLevel: 6, default: true }] }]
+        : q === 'Munich' ? [stop('Munich - Bus Station', 48.142, 11.55), stop('Quinconces Munich', 44.8, -0.57, 'FR')]
+        : q === 'München' ? [stop('München Ost', 48.127, 11.605), stop('München Hbf', 48.140, 11.558), stop('Hauptbahnhof', 52.52, 13.37)]
+        : q === 'Nowhere' ? [stop('Nowhere Bus Stop', 50, 10)]
+        : [];
+      return { ok: true, status: 200, json: async () => data };
+    }
+    planned.push(u.searchParams.get('fromPlace'));
+    return { ok: true, status: 200, json: async () => ({ itineraries: [] }) };
+  };
+  const { TRANSIT } = load('airports.js', 'common.js', { fetch, URL });
+  const town = (await TRANSIT.places('Munich'))[0];
+  assert.strictEqual(town.kind, 'Town');
+  assert.strictEqual(town.local, 'München');
+  const st = await TRANSIT.mainStation(town);
+  assert.strictEqual(st.name, 'München Hbf');                 // Hbf beats Ost and the bus station; the far "Hauptbahnhof" is ignored
+  const r = await TRANSIT.plan({ from: town, to: { name: 'Augsburg Hbf', lat: 48.365, lon: 10.886, kind: 'Station' }, time: '2026-12-12T08:00:00Z' });
+  assert.strictEqual(planned[0], '48.14,11.558');
+  assert.strictEqual(r.from.name, 'München Hbf');
+  assert.strictEqual(r.to.name, 'Augsburg Hbf');               // a station stays as picked
+  // no main station found: the town itself, as before
+  const lone = { name: 'Nowhere', lat: 50, lon: 10, country: 'DE', kind: 'Town' };
+  assert.strictEqual(await TRANSIT.mainStation(lone), null);
+  const n = asked.length; await TRANSIT.mainStation(town); assert.strictEqual(asked.length, n, 'asked once per town');
+});

@@ -296,9 +296,9 @@ footer .s{font:700 1.3rem/1.4 var(--font-d);letter-spacing:-.03em;color:#fff}
   /* tablet: menu labels stay on one line */
   .nav ul a.link{white-space:nowrap;padding:7px 10px}
   /* flights trip type: wraps onto a second line as whole words instead of breaking "Multi-/city" */
-  #tripType{display:flex;flex-wrap:wrap;width:100%;border-radius:16px}
-  #tripType button{flex:1 1 auto;white-space:nowrap;border-radius:13px}
-  #tripType .seg-thumb{border-radius:13px}
+  #tripType:has(> button:nth-of-type(3)){display:flex;flex-wrap:wrap;width:100%;border-radius:16px}   /* the Flights tabs, not the 2-button switches */
+  #tripType:has(> button:nth-of-type(3)) button{flex:1 1 auto;white-space:nowrap;border-radius:13px}
+  #tripType:has(> button:nth-of-type(3)) .seg-thumb{border-radius:13px}
 }
 @media (max-width:560px){
   .wrap{padding:0 16px}
@@ -373,6 +373,7 @@ html,body{overflow-x:clip;max-width:100%}
 .alt-fare{font-size:.85rem;color:var(--ink-soft);margin-top:4px}
 .alt-fare a{color:inherit}
 .deal .amt{font:700 1.45rem/1.1 var(--font-d);letter-spacing:-.03em;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+.cost-add{margin:6px 0 0 6px}
 .deal .amt small{display:block;font:500 .75rem/1.3 var(--font-b);letter-spacing:0;color:var(--muted)}
 .deal .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;max-width:260px}
 .from-tag{display:inline-block;font-size:.7rem;font-weight:700;background:var(--y-bg);color:var(--y-fg);border-radius:6px;padding:1px 6px;margin-left:6px}

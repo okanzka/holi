@@ -875,6 +875,34 @@ const LEGS = {
   },
 };
 
+/* ---------- trip costs besides flights and stays: buses, trains, anything typed in.
+   Shown in the stay planner's total on the hotels page. price: for everyone, or per person when pp. ---------- */
+const COSTS = {
+  KEY:'tripCosts',
+  list(){ const l=H.load(this.KEY,[]); return Array.isArray(l)?l:[]; },
+  /* {kind, title, sub, price, cur, pp} -> id, or null for a missing or negative price */
+  add(c){
+    const price=Math.round(parseFloat(String(c.price).replace(',','.'))*100)/100;
+    if(!Number.isFinite(price)||price<0) return null;
+    const id=Date.now().toString(36)+Math.random().toString(36).slice(2,6), l=this.list();
+    l.push({id,kind:c.kind||'other',title:String(c.title||'Other').trim().slice(0,120),sub:String(c.sub||'').trim().slice(0,160),price,cur:String(c.cur||'EUR').toUpperCase(),pp:!!c.pp});
+    H.save(this.KEY,l); return id;
+  },
+  remove(id){ H.save(this.KEY,this.list().filter(c=>c.id!==id)); },
+  /* the total in `cur` for `pax` travellers; costs in another currency are left out (no exchange rates) and listed in `other` */
+  sum(cur,pax=1){ const items=this.list(), mine=items.filter(c=>c.cur===cur);
+    return {total:Math.round(mine.reduce((s,c)=>s+c.price*(c.pp?pax:1),0)*100)/100,items,other:items.filter(c=>c.cur!==cur)}; },
+  /* the "➕ Trip cost" button on a ride; ask: no price known (timetable trains), so it asks for the one found */
+  button(c){ return `<button type="button" class="btn ghost sm cost-add" data-cost="${H.esc(JSON.stringify(c))}">➕ Trip cost</button>`; },
+};
+document.addEventListener('click',e=>{
+  const b=e.target&&e.target.closest&&e.target.closest('[data-cost]'); if(!b) return;
+  let c; try{ c=JSON.parse(b.dataset.cost); }catch(err){ return; }
+  if(c.ask){ const v=prompt(`Price you found for ${c.title}, for everyone (${c.cur}):`,''); if(v===null) return; c.price=v; }
+  if(!COSTS.add(c)){ H.toast('Enter a price, e.g. 49.90'); return; }
+  b.textContent='✓ Added'; b.disabled=true; H.toast('Added to your trip cost. See the total on Hotels');
+});
+
 /* ---------- buses and trains: FlixBus (prices, also FlixTrain) and Transitous (European train timetables).
    Both answer the browser directly, so this works without the local server too. ---------- */
 const dmy=iso=>iso.slice(8,10)+'.'+iso.slice(5,7)+'.'+iso.slice(0,4);
@@ -919,22 +947,45 @@ const FLIX = {
 };
 const TRANSIT = {
   base:'https://api.transitous.org/api/v1',
-  /* stations and towns for a name: {name, lat, lon, tz, country} */
+  /* stations and towns for a name: {name, lat, lon, tz, country, kind, local?} (local: the town's own name, e.g. München) */
   async places(q,signal){
     if(!q||q.trim().length<2) return [];
     const r=await NET.json(`${this.base}/geocode?`+new URLSearchParams({text:q.trim()}),{signal},10000);
     const seen=new Set();
     return (r.ok&&Array.isArray(r.data)?r.data:[]).filter(p=>p.type==='STOP'||p.type==='PLACE')
-      .map(p=>({name:p.name,lat:p.lat,lon:p.lon,tz:p.tz||'',country:p.country||'',kind:p.type==='STOP'?'Station':'Town'}))
+      .map(p=>{ const o={name:p.name,lat:p.lat,lon:p.lon,tz:p.tz||'',country:p.country||'',kind:p.type==='STOP'?'Station':'Town'};
+        const a=p.type==='PLACE'&&(p.areas||[]).find(x=>x.default); if(a&&a.name&&a.name!==p.name) o.local=a.name; return o; })
       .filter(p=>{ const k=p.name+'|'+p.country; if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,8);
   },
-  /* trains leaving after `time` (ISO); cursor: the `next` of an earlier answer, for later trains */
+  /* a town's main station (Hbf, Centrale, Termini, hl.n.…) within 20 km, in its country; null when none is found.
+     Asked under its name and its local name ("Munich" knows few stations, "München" finds München Hbf). */
+  MAIN:[/\b(hbf|hauptbahnhof)\b/i,/hl\.? ?n\.?$|hlavn/i,/\b(centrale|centraal|central station|centralstation|termini|główny|glowny|centralna|keleti|hovedbaneg|sentralstasjon)\b/i,/\bhb$| h$/i,/\bcentral\b/i],
+  _main:new Map(),
+  async mainStation(town,signal){
+    const k=[town.name,town.country,town.lat,town.lon].join('|');
+    if(this._main.has(k)) return this._main.get(k);
+    const R=6371, rad=x=>x*Math.PI/180, km=p=>{ const a=rad(p.lat-town.lat), b=rad(p.lon-town.lon);
+      return 2*R*Math.asin(Math.sqrt(Math.sin(a/2)**2+Math.cos(rad(town.lat))*Math.cos(rad(p.lat))*Math.sin(b/2)**2)); };
+    const texts=[...new Set([town.name,town.local].filter(Boolean))];
+    const lists=await Promise.all(texts.map(t=>NET.json(`${this.base}/geocode?`+new URLSearchParams({text:t,type:'STOP',place:town.lat+','+town.lon}),{signal},10000)
+      .then(r=>r.ok&&Array.isArray(r.data)?r.data:[]).catch(()=>[])));
+    const rank=n=>{ const i=this.MAIN.findIndex(re=>re.test(n)); return i<0?99:i; };
+    const best=lists.flat().filter(p=>p&&p.type==='STOP'&&p.lat!=null&&(!town.country||p.country===town.country)&&km(p)<=20&&!/\bbus\b/i.test(p.name))
+      .map(p=>({p,r:rank(p.name),d:km(p)})).filter(x=>x.r<99).sort((a,b)=>a.r-b.r||a.d-b.d)[0];
+    const st=best?{name:best.p.name,lat:best.p.lat,lon:best.p.lon,tz:best.p.tz||'',country:best.p.country||'',kind:'Station'}:null;
+    if(!signal||!signal.aborted) this._main.set(k,st);
+    return st;
+  },
+  /* trains leaving after `time` (ISO); cursor: the `next` of an earlier answer, for later trains.
+     A town leaves from (or arrives at) its main station when one is found; {from, to} say which places were used. */
   async plan({from,to,time,cursor,signal}){
+    const at=async p=>p.kind==='Town'?(await this.mainStation(p,signal).catch(()=>null))||p:p;
+    [from,to]=await Promise.all([at(from),at(to)]);
     const p={fromPlace:from.lat+','+from.lon,toPlace:to.lat+','+to.lon,time,transitModes:'RAIL',numItineraries:'6'};
     if(cursor) p.pageCursor=cursor;
     const r=await NET.json(`${this.base}/plan?`+new URLSearchParams(p),{signal},30000);
     if(!r.ok) throw new Error('Transitous '+r.status);
-    return {trips:TRANSIT.parse(r.data),next:(r.data&&r.data.nextPageCursor)||null};
+    return {trips:TRANSIT.parse(r.data),next:(r.data&&r.data.nextPageCursor)||null,from,to};
   },
   /* {dep, arr (ISO), mins, transfers, legs:[{name, from, to, dep, arr, agency, url}]} — walks left out */
   parse(d){

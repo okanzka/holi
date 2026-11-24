@@ -91,3 +91,50 @@ test('load: one forecast call and 3 archive calls (one per past year) for many d
   await W2.load(deals, TODAY);                                       // does not throw
   assert.equal(W2.summary('BJV', '2027-07-01', '2027-07-04', TODAY), null);
 });
+
+/* Open-Meteo answers 429 when asked too often: the badges must come back later, and a reload must not ask again. */
+const store = () => { const m = new Map(); return { getItem: k => m.has(k) ? m.get(k) : null, setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k) }; };
+const meteo = calls => async url => {
+  calls.push(url);
+  const u = new URL(url), s = u.searchParams.get('start_date'), e = u.searchParams.get('end_date');
+  const time = []; for (let d = new Date(s); d <= new Date(e); d.setDate(d.getDate() + 1)) time.push(d.toISOString().slice(0, 10));
+  const daily = url.includes('archive')
+    ? { time, temperature_2m_max: time.map(() => 30), precipitation_sum: time.map(() => 0), cloud_cover_mean: time.map(() => 0) }
+    : { time, temperature_2m_max: time.map(() => 20), weather_code: time.map(() => 3) };
+  return { ok: true, status: 200, json: async () => ({ daily }) };
+};
+const DEALS = [{ dest: 'BCN', dep: '2026-11-26', ret: '2026-11-29' }, { dest: 'BCN', dep: '2027-08-01', ret: '2027-08-03' }];
+
+test('a refused call (429) is asked again after a pause, not never', async () => {
+  let refuse = true; const calls = [];
+  const ok = meteo(calls);
+  const fetch = async url => refuse ? (calls.push(url), { ok: false, status: 429, json: async () => ({ error: true }) }) : ok(url);
+  const { WX } = load('airports.js', 'common.js', 'weather.js', { fetch, URL, localStorage: store() });
+  await WX.load(DEALS, TODAY);
+  assert.equal(WX.summary('BCN', '2027-08-01', '2027-08-03', TODAY), null);
+  const n = calls.length;
+  refuse = false;
+  await WX.load(DEALS, TODAY);
+  assert.equal(calls.length, n, 'right after a 429: wait');
+  WX.pauseUntil = 0;                                                  // the pause is over
+  await WX.load(DEALS, TODAY);
+  assert.deepStrictEqual(js(WX.summary('BCN', '2027-08-01', '2027-08-03', TODAY)), { t: 30, i: '☀️', typ: true });
+  assert.deepStrictEqual(js(WX.summary('BCN', '2026-11-26', '2026-11-29', TODAY)), { t: 20, i: '☁️', typ: false });
+});
+
+test('weather is kept on this device: typical for 30 days, a forecast for 3 hours', async () => {
+  const ls = store(), calls = [];
+  const { WX } = load('airports.js', 'common.js', 'weather.js', { fetch: meteo(calls), URL, localStorage: ls });
+  await WX.load(DEALS, TODAY);
+  assert.ok(calls.length > 0);
+  // next visit, offline: both still shown, nothing asked
+  const none = async () => { throw new Error('offline'); };
+  const { WX: W2 } = load('airports.js', 'common.js', 'weather.js', { fetch: none, URL, localStorage: ls });
+  assert.deepStrictEqual(js(W2.summary('BCN', '2027-08-01', '2027-08-03', TODAY)), { t: 30, i: '☀️', typ: true });
+  assert.deepStrictEqual(js(W2.summary('BCN', '2026-11-26', '2026-11-29', TODAY)), { t: 20, i: '☁️', typ: false });
+  // 4 hours later: the forecast is stale and gone, the typical weather stays
+  const realNow = Date.now;
+  const { WX: W3 } = load('airports.js', 'common.js', 'weather.js', { fetch: none, URL, localStorage: ls, Date: class extends Date { static now() { return realNow() + 4 * 3600e3; } } });
+  assert.equal(W3.summary('BCN', '2026-11-26', '2026-11-29', TODAY), null);
+  assert.ok(W3.summary('BCN', '2027-08-01', '2027-08-03', TODAY));
+});

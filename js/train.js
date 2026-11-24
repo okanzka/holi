@@ -18,7 +18,8 @@ function tripRow(it,a,b){
       <div class="hint">${hm(it.mins)} · ${it.transfers?it.transfers+' change'+(it.transfers>1?'s':''):'Direct'}${via.length?' at '+via.map(H.esc).join(', '):''}</div>
       <div class="tr-legs">${legs}</div></div>
     <div class="amt"><small>${H.esc([...new Set(it.legs.map(l=>l.agency).filter(Boolean))].join(', '))}</small>
-      <a class="btn primary sm" style="margin-top:6px" target="_blank" rel="noopener" href="${H.esc(TRANSIT.bookUrl(it))}">Check price ↗</a></div></div>`;
+      <a class="btn primary sm" style="margin-top:6px" target="_blank" rel="noopener" href="${H.esc(TRANSIT.bookUrl(it))}">Check price ↗</a>
+      ${COSTS.button({kind:'train',title:`${it.legs[0].from} → ${it.legs[it.legs.length-1].to}`,sub:`Train · ${H.nice(H.parse(it.dep.slice(0,10)))} ${clock(it.dep,a.tz)}`,cur:H.trip().currency,ask:true})}</div></div>`;
 }
 /* dir 'out' or 'back' (round trip): its list, title and "Later trains" button */
 function renderTrips(dir,msg){
@@ -28,7 +29,8 @@ function renderTrips(dir,msg){
   $(back?'#tripsBackTitle':'#tripsTitle').textContent=`${back?'Back':'Trains'} on ${H.nice(H.parse(date))}`;
   if(msg){ box.innerHTML=msg; return; }
   if(!D.trips.length){ box.innerHTML='<div class="empty">No trains found. Try another time, or a bigger station nearby.</div>'; return; }
-  box.innerHTML=`<p class="hint">${H.esc(a.name)} → ${H.esc(b.name)}</p>`+D.trips.map(it=>tripRow(it,a,b)).join('');
+  const [fa,fb]=D.at||[a,b];                              // a town plans from its main station: name that one
+  box.innerHTML=`<p class="hint">${H.esc(fa.name)} → ${H.esc(fb.name)}</p>`+D.trips.map(it=>tripRow(it,a,b)).join('');
 }
 async function loadTrips(dir,more){
   const s=S(), back=dir==='back', [a,b]=back?[s.to,s.from]:[s.from,s.to], date=back?s.backDate:s.date, time=back?s.backTime:s.time;
@@ -37,7 +39,7 @@ async function loadTrips(dir,more){
   try{ const r=await TRANSIT.plan({from:a,to:b,time:new Date(`${date}T${time||'08:00'}`).toISOString(),cursor:more?st[dir].next:null});
     if(st[dir].key!==key) return;
     const seen=new Set(st[dir].trips.map(t=>t.dep+t.arr));
-    st[dir].trips.push(...r.trips.filter(t=>!seen.has(t.dep+t.arr))); st[dir].next=r.next; renderTrips(dir); }
+    st[dir].trips.push(...r.trips.filter(t=>!seen.has(t.dep+t.arr))); st[dir].next=r.next; if(r.from&&r.to) st[dir].at=[r.from,r.to]; renderTrips(dir); }
   catch(e){ if(st[dir].key===key) renderTrips(dir,'<div class="empty">Could not load trains. Check your internet connection and try again.</div>'); }
 }
 /* FlixTrain: FlixBus's own trains, with live prices, where both towns have them (both ways on a round trip) */
@@ -52,7 +54,8 @@ async function loadFlixTrain(){
       rt?FLIX.search({from:b[0].id,to:a[0].id,date:s.backDate,adults:1,currency:cur}).then(trains):Promise.resolve([])]);
     const row=x=>`<div class="deal ride"><div><div class="t">🚆 ${H.time(x.dep)} → ${H.time(x.arr)}</div>
         <div class="hint">${hm(x.mins)} · ${x.transfers?x.transfers+' change'+(x.transfers>1?'s':''):'Direct'}<br>${H.esc(x.fromSt)} → ${H.esc(x.toSt)}</div></div>
-      <div class="amt">${money(x.price,x.cur)}<small>per person</small><a class="btn primary sm" style="margin-top:6px" target="_blank" rel="noopener" href="${H.esc(x.url)}">Book ↗</a></div></div>`;
+      <div class="amt">${money(x.price,x.cur)}<small>per person</small><a class="btn primary sm" style="margin-top:6px" target="_blank" rel="noopener" href="${H.esc(x.url)}">Book ↗</a>
+        ${COSTS.button({kind:'train',title:`${x.fromSt} → ${x.toSt}`,sub:`FlixTrain · ${H.nice(H.parse(x.dep.slice(0,10)))} ${H.time(x.dep)}`,price:x.price,cur:x.cur,pp:true})}</div></div>`;
     const part=(l,title,date,x,y)=>`<p class="hint">${title} · ${H.esc(H.nice(H.parse(date)))}</p>`+(l.length?l.slice(0,6).map(row).join('')
       :`<div class="empty">No FlixTrain that day. <a href="bus.html?from=${encodeURIComponent(x)}&to=${encodeURIComponent(y)}&date=${date}">See buses ↗</a></div>`);
     if(!out.length&&!back.length&&!rt){ box.innerHTML=`<div class="empty">No FlixTrain between ${H.esc(a[0].name)} and ${H.esc(b[0].name)} that day. <a href="bus.html?from=${encodeURIComponent(a[0].name)}&to=${encodeURIComponent(b[0].name)}&date=${s.date}">See buses ↗</a></div>`; return; }

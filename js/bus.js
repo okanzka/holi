@@ -27,7 +27,8 @@ function rideRow(r){
   return `<div class="deal ride"><div><div class="t">${icons} ${H.time(r.dep)} → ${H.time(r.arr)}${r.arr.slice(0,10)>r.dep.slice(0,10)?' <small>+1</small>':''}</div>
       <div class="hint">${hm(r.mins)} · ${r.transfers?r.transfers+' change'+(r.transfers>1?'s':''):'Direct'}${seats}<br>${H.esc(r.fromSt)} → ${H.esc(r.toSt)}</div></div>
     <div class="amt">${money(r.price,r.cur)}<small>${each(r,S().adults||1)}</small>
-      <a class="btn primary sm" style="margin-top:6px" target="_blank" rel="noopener" href="${H.esc(r.url)}">Book ↗</a></div></div>`;
+      <a class="btn primary sm" style="margin-top:6px" target="_blank" rel="noopener" href="${H.esc(r.url)}">Book ↗</a>
+      ${COSTS.button({kind:r.modes.every(m=>m==='train')?'train':'bus',title:`${r.fromSt} → ${r.toSt}`,sub:`FlixBus · ${H.nice(H.parse(r.dep.slice(0,10)))} ${H.time(r.dep)}`,price:r.price,cur:r.cur})}</div></div>`;
 }
 function renderRides(dir){
   const s=S(), D=st[dir], box=$(dir==='out'?'#rides':'#ridesBack'), back=dir==='back';

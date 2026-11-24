@@ -107,7 +107,7 @@
   const showWizard=()=>renderStayWizard(document.getElementById('stayWizard'));
   document.addEventListener('DOMContentLoaded',showWizard);
   window.addEventListener('hashchange',showWizard);                                   // already on this page
-  window.addEventListener('storage',e=>{ if(e.key==='heybe.stayPlan') showWizard(); });  // plan changed in another tab
+  window.addEventListener('storage',e=>{ if(e.key==='heybe.stayPlan'||e.key==='heybe.tripCosts') showWizard(); });  // plan or costs changed in another tab
 </script>
 </body>
 </html>
