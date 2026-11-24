@@ -47,12 +47,32 @@ test('Transitous trips: walking left out, duration in minutes', () => {
   assert.strictEqual(r[0].legs[0].name, 'ICE 1162');
 });
 
-test('train booking: DB trips go to bahn.de with the stations, others to the operator', () => {
+test('train booking: DB trips go to bahn.de, others to the operator', () => {
   const { TRANSIT } = load('airports.js', 'common.js');
   const db = TRANSIT.parse({ itineraries: [{ startTime: '2026-12-12T08:01:00Z', endTime: 'e', duration: 1, legs: [leg()] }] })[0];
-  assert.match(TRANSIT.bookUrl(db), /^https:\/\/www\.bahn\.de\/buchung\/fahrplan\/suche#.*so=N%C3%BCrnberg\+Hbf/);
+  assert.strictEqual(TRANSIT.bookUrl(db), 'https://www.bahn.de');   // the filled-in search comes from dbLink()
   const obb = TRANSIT.parse({ itineraries: [{ startTime: 's', endTime: 'e', duration: 1, legs: [leg({ agencyName: 'ÖBB', agencyUrl: 'https://www.oebb.at' })] }] })[0];
   assert.strictEqual(TRANSIT.bookUrl(obb), 'https://www.oebb.at');
+});
+
+/* bahn.de ignores station names alone (empty search for today): it needs the DB station numbers, and the time in German time */
+test('train booking: the bahn.de link carries the DB station numbers and the German departure time', async () => {
+  const stations = [['8000284', 49.445615, 11.082989, 'Nürnberg Hbf'], ['8011160', 52.525589, 13.369548, 'Berlin Hbf'], ['8098160', 52.5262, 13.3700, 'Berlin Hbf (tief)']];
+  const fetch = async (u) => { assert.match(String(u), /data\/db-stations\.json$/); return { ok: true, json: async () => stations }; };
+  const { TRANSIT } = load('airports.js', 'common.js', { fetch });
+  const it = TRANSIT.parse({ itineraries: [{ startTime: '2026-12-06T10:03:00Z', endTime: 'e', duration: 1, legs: [
+    leg({ startTime: '2026-12-06T10:03:00Z', from: { name: 'Nürnberg Hbf', lat: 49.445618, lon: 11.082989 }, to: { name: 'S+U Berlin Hauptbahnhof', lat: 52.525143, lon: 13.369612 } })] }] })[0];
+  const u = await TRANSIT.dbLink(it);
+  const q = new URLSearchParams(u.split('#')[1]);
+  assert.ok(u.startsWith('https://www.bahn.de/buchung/fahrplan/suche#'));
+  assert.strictEqual(q.get('soei'), '8000284');
+  assert.strictEqual(q.get('zoei'), '8011160');                     // the nearest station, not the one 120 m away
+  assert.strictEqual(q.get('soid'), 'A=1@O=Nürnberg Hbf@L=8000284@');
+  assert.strictEqual(q.get('zo'), 'Berlin Hbf');
+  assert.strictEqual(q.get('hd'), '2026-12-06T11:03:00');            // 10:03 UTC is 11:03 in Germany
+  // a stop with no DB station nearby: the operator's site, not an empty bahn.de search
+  const far = TRANSIT.parse({ itineraries: [{ startTime: 's', endTime: 'e', duration: 1, legs: [leg({ from: { name: 'Nowhere', lat: 10, lon: 10 } })] }] })[0];
+  assert.strictEqual(await TRANSIT.dbLink(far), 'https://www.bahn.de');
 });
 
 test('FlixBus reachable places: the price range in the asked currency, and whether a train goes there', () => {

@@ -11,14 +11,14 @@ const money=(n,cur)=>{ try{ return new Intl.NumberFormat('en',{style:'currency',
 /* the town of a station, for FlixBus's city search: "Nürnberg Hbf" → "Nürnberg" */
 const town=n=>String(n||'').replace(/\s*(Hbf|Hauptbahnhof|Central|Centrale|Centraal|Station|Bahnhof|Gare|Stazione).*$/i,'').split(/[,(]/)[0].trim();
 
-function tripRow(it,a,b){
+function tripRow(it,a,b,ref){
   const legs=it.legs.map(l=>`<span class="tr-leg" title="${H.esc(l.agency)}">${H.esc(l.name)}</span>`).join('<i>›</i>');
   const via=it.legs.slice(0,-1).map(l=>l.to).filter(Boolean);
   return `<div class="deal ride"><div><div class="t">${clock(it.dep,a.tz)} → ${clock(it.arr,b.tz||a.tz)}</div>
       <div class="hint">${hm(it.mins)} · ${it.transfers?it.transfers+' change'+(it.transfers>1?'s':''):'Direct'}${via.length?' at '+via.map(H.esc).join(', '):''}</div>
       <div class="tr-legs">${legs}</div></div>
     <div class="amt"><small>${H.esc([...new Set(it.legs.map(l=>l.agency).filter(Boolean))].join(', '))}</small>
-      <a class="btn primary sm" style="margin-top:6px" target="_blank" rel="noopener" href="${H.esc(TRANSIT.bookUrl(it))}">Check price ↗</a>
+      <a class="btn primary sm" style="margin-top:6px" target="_blank" rel="noopener" href="${H.esc(TRANSIT.bookUrl(it))}"${TRANSIT.isDB(it)?` data-db="${ref}"`:''}>Check price ↗</a>
       ${COSTS.button({kind:'train',title:`${it.legs[0].from} → ${it.legs[it.legs.length-1].to}`,sub:`Train · ${H.nice(H.parse(it.dep.slice(0,10)))} ${clock(it.dep,a.tz)}`,cur:H.trip().currency,ask:true})}</div></div>`;
 }
 /* dir 'out' or 'back' (round trip): its list, title and "Later trains" button */
@@ -30,7 +30,7 @@ function renderTrips(dir,msg){
   if(msg){ box.innerHTML=msg; return; }
   if(!D.trips.length){ box.innerHTML='<div class="empty">No trains found. Try another time, or a bigger station nearby.</div>'; return; }
   const [fa,fb]=D.at||[a,b];                              // a town plans from its main station: name that one
-  box.innerHTML=`<p class="hint">${H.esc(fa.name)} → ${H.esc(fb.name)}</p>`+D.trips.map(it=>tripRow(it,a,b)).join('');
+  box.innerHTML=`<p class="hint">${H.esc(fa.name)} → ${H.esc(fb.name)}</p>`+D.trips.map((it,i)=>tripRow(it,a,b,dir+':'+i)).join('');
 }
 async function loadTrips(dir,more){
   const s=S(), back=dir==='back', [a,b]=back?[s.to,s.from]:[s.from,s.to], date=back?s.backDate:s.date, time=back?s.backTime:s.time;
@@ -89,6 +89,14 @@ function show(){
 }
 function run(go){ const s=S(); show(); if(s.to.any){ loadAnywhere(go); return; } loadTrips('out'); if(s.trip==='rt') loadTrips('back'); loadFlixTrain(); }
 
+/* DB trips: bahn.de needs the DB station numbers, looked up on click. The tab opens at once (no pop-up block), then goes there. */
+document.addEventListener('click',e=>{
+  const a=e.target.closest&&e.target.closest('a[data-db]'); if(!a) return;
+  const [dir,i]=a.dataset.db.split(':'), it=(st[dir]||{trips:[]}).trips[+i]; if(!it) return;
+  e.preventDefault();
+  const w=window.open('about:blank','_blank'); if(w) w.opener=null;
+  TRANSIT.dbLink(it).then(u=>{ if(w) w.location.href=u; else location.href=u; });
+});
 document.addEventListener('DOMContentLoaded',()=>{
   const T=H.trip(), qp=new URLSearchParams(location.search);
   const s0=Object.assign({date:T.start,time:'08:00',backDate:T.end,backTime:'08:00',trip:'ow'},S());

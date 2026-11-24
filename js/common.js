@@ -991,14 +991,34 @@ const TRANSIT = {
   parse(d){
     return ((d&&d.itineraries)||[]).map(it=>({dep:it.startTime,arr:it.endTime,mins:Math.round((it.duration||0)/60),transfers:it.transfers||0,
       legs:(it.legs||[]).filter(l=>l.mode!=='WALK').map(l=>({name:l.displayName||l.routeShortName||l.tripShortName||l.mode,from:(l.from||{}).name||'',to:(l.to||{}).name||'',
+        fromAt:[(l.from||{}).lat,(l.from||{}).lon],toAt:[(l.to||{}).lat,(l.to||{}).lon],
         dep:l.startTime,arr:l.endTime,agency:l.agencyName||'',url:l.agencyUrl||''}))})).filter(it=>it.legs.length);
   },
-  /* where to buy: Deutsche Bahn trips on bahn.de with the stations filled in, others on the first operator's site */
+  isDB:it=>it.legs.some(x=>/DB |Deutsche Bahn/i.test(x.agency)),
+  /* where to buy, without waiting: the first operator's site (bahn.de for DB trips). dbLink() makes the filled-in bahn.de search. */
   bookUrl(it){
     const l=it.legs[0];
-    if(it.legs.some(x=>/DB |Deutsche Bahn/i.test(x.agency))||!l.url)
-      return 'https://www.bahn.de/buchung/fahrplan/suche#'+new URLSearchParams({sts:'true',so:l.from,zo:it.legs[it.legs.length-1].to,hd:it.dep.slice(0,16)});
-    return l.url;
+    return TRANSIT.isDB(it)||!l.url?'https://www.bahn.de':l.url;
+  },
+  /* DB station numbers (EVA) with places: [[eva, lat, lon, name]], from Trainline's open station list (ODbL), loaded on first use */
+  _db:null,
+  dbStations(){
+    return this._db||(this._db=fetch('data/db-stations.json').then(r=>r.ok?r.json():[]).catch(()=>[]).then(a=>{ if(!a.length) this._db=null; return a; }));
+  },
+  /* the DB station within 1 km of [lat, lon]: {eva, name}, or null */
+  async dbStation(at){
+    const [lat,lon]=at||[]; if(lat==null||lon==null) return null;
+    const k=Math.cos(lat*Math.PI/180); let best=null, bd=1/111.2;   // 1 km, in degrees of latitude
+    for(const s of await this.dbStations()){ const d=Math.hypot(s[1]-lat,(s[2]-lon)*k); if(d<bd){ bd=d; best=s; } }
+    return best&&{eva:best[0],name:best[3]};
+  },
+  /* bahn.de search for this trip: both stations by DB number (names alone give an empty search) and the time in German time */
+  async dbLink(it){
+    const [a,b]=await Promise.all([this.dbStation(it.legs[0].fromAt),this.dbStation(it.legs[it.legs.length-1].toAt)]);
+    if(!a||!b) return this.bookUrl(it);
+    const de=new Date(it.dep).toLocaleString('sv-SE',{timeZone:'Europe/Berlin'}).replace(' ','T');   // "2026-12-06T11:03:00"
+    return 'https://www.bahn.de/buchung/fahrplan/suche#'+new URLSearchParams({sts:'true',so:a.name,zo:b.name,
+      soid:`A=1@O=${a.name}@L=${a.eva}@`,zoid:`A=1@O=${b.name}@L=${b.eva}@`,sot:'ST',zot:'ST',soei:a.eva,zoei:b.eva,hd:de,hza:'D',kl:'2'}).toString().replace(/\+/g,'%20');   // %20 like bahn.de's own links
   },
 };
 /* a text box with a list of places while typing, like the airport boxes (bus and train pages).

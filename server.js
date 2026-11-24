@@ -238,9 +238,9 @@ function resolveFile(pathname){
   try { p = decodeURIComponent(pathname); } catch (e) { return null; }      // malformed, e.g. "/%"
   if (p === '/') p = '/index.html';
   const file = path.normalize(path.join(ROOT, p));
-  // only the site itself: the pages in the root, and the css, js, image and app-icon folders
+  // only the site itself: the pages in the root, and the css, js, image, app-icon and data folders
   const rel = path.relative(ROOT, file).split(path.sep).join('/');
-  if (!/^[\w-]+\.html$|^(css|js|background-image|icons)\/[^/]+$/i.test(rel)) return null;
+  if (!/^[\w-]+\.html$|^(css|js|background-image|icons|data)\/[^/]+$/i.test(rel)) return null;
   return file;
 }
 function serveFile(res, url){
