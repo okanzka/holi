@@ -126,6 +126,7 @@ main{position:relative;z-index:3}
 /* ---------- cards ---------- */
 .card{background:var(--paper);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px}
 .card + .card{margin-top:20px}
+.lift > div:not(#things) > .card:first-child{margin-top:20px}   /* first card inside a mode box (#anyMode, #routeBox…) keeps the gap under the trip card */
 .card h2{font-size:1.55rem}
 .card h2 .ico{display:inline-grid;place-items:center;width:38px;height:38px;margin-right:10px;border-radius:12px;background:linear-gradient(135deg,#fff3d6,#ffe1e4);font-size:1.15rem;vertical-align:-7px}
 .sub{color:var(--ink-soft);margin:-4px 0 18px;font-size:.95rem}
@@ -746,3 +747,22 @@ html[data-theme="dark"] .hero.photo{background-color:#000;background-image:var(-
 /* phone: price, note and button share one line under the ride */
 @media (max-width:760px){.deal.ride .amt{flex-direction:row;flex-wrap:wrap;align-items:center;gap:2px 10px;text-align:left}
   .deal.ride .amt small{flex:1;min-width:0}.deal.ride .amt .btn{margin-top:0 !important}}
+
+/* ---------- ticket cards: a stub on the left, a dashed tear line, notches top and bottom ----------
+   The card paints nothing itself: ::before is the stub, ::after the main ticket, so nothing is clipped
+   (dropdowns can still hang out of a card) and the drop-shadow follows the notches. */
+.card{--stub:64px;--notch:10px;position:relative;isolation:isolate;background:none;box-shadow:none;padding-left:calc(var(--stub) + 28px)}
+.card::before,.card::after{position:absolute;top:0;bottom:0;z-index:-1;filter:drop-shadow(0 1px 1px rgba(15,42,74,.06)) drop-shadow(0 8px 14px rgba(15,42,74,.10))}
+.card::before{content:"";left:0;width:var(--stub);border-radius:var(--radius) 0 0 var(--radius);
+  background:url("../icons/stub-wings.svg") center/calc(var(--stub) - 12px) auto no-repeat,
+             radial-gradient(circle at 100% 0,transparent var(--notch),var(--paper) calc(var(--notch) + .5px)) top/100% 51% no-repeat,
+             radial-gradient(circle at 100% 100%,transparent var(--notch),var(--paper) calc(var(--notch) + .5px)) bottom/100% 51% no-repeat}
+.card::after{content:"";left:var(--stub);right:0;border-radius:0 var(--radius) var(--radius) 0;
+  background:repeating-linear-gradient(to bottom,var(--line) 0 6px,transparent 6px 12px) 0 calc(var(--notch) + 6px)/2px calc(100% - 2*var(--notch) - 12px) no-repeat,
+             radial-gradient(circle at 0 0,transparent var(--notch),var(--paper) calc(var(--notch) + .5px)) top/100% 51% no-repeat,
+             radial-gradient(circle at 0 100%,transparent var(--notch),var(--paper) calc(var(--notch) + .5px)) bottom/100% 51% no-repeat}
+html[data-theme="dark"] .card::before,html[data-theme="dark"] .card::after{filter:drop-shadow(0 0 .5px rgba(255,255,255,.18)) drop-shadow(0 10px 16px rgba(0,0,0,.6))}
+@media (max-width:560px){
+  .card{--stub:30px;--notch:8px;padding-left:calc(var(--stub) + 16px)}
+}
+@media (prefers-contrast:more){.card{border:none!important}.card::before,.card::after{filter:drop-shadow(0 0 1px var(--ink))}}

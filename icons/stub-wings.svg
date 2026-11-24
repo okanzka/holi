@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 44">
+  <!-- heybe's own wings badge for the ticket stub: gold wings, red round badge, white plane -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7dc95"/>
+      <stop offset="1" stop-color="#c38d2c"/>
+    </linearGradient>
+  </defs>
+  <g id="w" fill="url(#g)">
+    <path d="M42 14C30 8 14 6 2 9C14 12 28 15 42 19Z"/>
+    <path d="M42 20C30 16 16 15 6 17C17 20 29 22 42 25Z"/>
+    <path d="M42 26C31 23 19 23 11 25C20 28 31 29 42 31Z"/>
+    <path d="M42 32C33 30 24 31 17 33C25 35 34 36 42 36Z"/>
+  </g>
+  <use href="#w" transform="matrix(-1 0 0 1 120 0)"/>
+  <circle cx="60" cy="22" r="16" fill="#e30a17" stroke="url(#g)" stroke-width="2.5"/>
+  <path fill="#fff" transform="translate(60 22) rotate(45) scale(.95)"
+        d="M0-9C1.2-9 1.5-7.5 1.5-6L1.5-2 9 2.5 9 4.5 1.5 2.2 1.5 6 3.8 7.8 3.8 9.2 0 8-3.8 9.2-3.8 7.8-1.5 6-1.5 2.2-9 4.5-9 2.5-1.5-2-1.5-6C-1.5-7.5-1.2-9 0-9Z"/>
+</svg>
