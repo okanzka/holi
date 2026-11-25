@@ -94,18 +94,18 @@ function renderLive(){
   if(live.error){ box.innerHTML=`<div class="empty">${H.esc(live.error)}. Use the sites in "Stay options" below instead.</div>`; return; }
   const L=STAYS.live(live.list,n,S.budget);
   if(!L.length){ box.innerHTML=`<div class="empty">No places found for ${H.esc(S.city)} on these dates${S.budget?' within your budget':''}. Try another spelling, other dates, or the sites below.</div>`; return; }
-  box.innerHTML=L.map((p,i)=>{ const link=/^https?:\/\//i.test(p.link||'')?p.link:'';
+  box.innerHTML=L.map((p,i)=>{ const b=STAYS.book(p,opts(S.ci,S.co));
     return `<div class="item"><div>
       <div class="t">${p.hostel?'🛏️':'🏨'} ${H.esc(p.name)}${p.rating?`<span class="stay-pill">⭐ ${p.rating}</span>`:''}</div>
       <div class="s">${H.esc(p.type||'Hotel')}${p.source?' · cheapest on '+H.esc(p.source):''}</div></div>
       <div class="row">${p.noPrice?'<div class="hint">no price for these dates</div>':`<div><div class="amt">${H.money(p.tot/n,cur)}<span class="hint"> /night</span></div><div class="hint" style="text-align:right">${H.money(p.tot,cur)} total</div></div>`}
-      ${link?`<a class="btn ghost sm" href="${H.esc(link)}" target="_blank" rel="noopener">View ↗</a>`:''}
-      ${p.noPrice?'':`<button class="btn primary sm" data-live="${i}">♡ Save</button>`}</div></div>`; }).join('');
+      ${p.noPrice?'':`<button class="btn ghost sm" data-live="${i}" title="Save to your shortlist" aria-label="Save ${H.esc(p.name)} to your shortlist">♡</button>`}
+      <a class="btn primary sm" href="${H.esc(b.url)}" target="_blank" rel="noopener" title="Opens ${H.esc(b.site)} for this place with your dates">Book on ${H.esc(b.site)} ↗</a></div></div>`; }).join('');
   box.querySelectorAll('[data-live]').forEach(b=>b.onclick=()=>{ const p=L[+b.dataset.live];
     const SL=H.load('shortlist',[]);
     SL.push({id:Date.now(),city:S.city,name:p.name,site:p.source||'Live price',price:Math.round(p.tot),rating:p.rating?Math.min(10,+(p.rating*2).toFixed(1)):null,
-      area:'',link:/^https?:\/\//i.test(p.link||'')?p.link:'',ci:S.ci,co:S.co,nights:n,cur});
-    H.save('shortlist',SL); H.toast('Added to shortlist 💖'); renderShortlist(); b.disabled=true; b.textContent='Saved ✓'; });
+      area:'',link:STAYS.book(p,opts(S.ci,S.co)).url,ci:S.ci,co:S.co,nights:n,cur});
+    H.save('shortlist',SL); H.toast('Added to shortlist 💖'); renderShortlist(); b.disabled=true; b.textContent='♥'; });
 }
 
 function renderShortlist(){

@@ -127,6 +127,12 @@ const STAYS = {
     return list;
   },
   /* hotels page: every kind of place, cheapest first; a max per night drops the priced places above it */
+  /* -> {site,url}: the site that gave the cheapest price (Booking.com if unknown), searched for this place with the dates filled in */
+  book(p,o){
+    const src=String(p.source||'').toLowerCase().replace(/\.com$|\s.*$/,'');
+    const s=HOTEL_SITES.find(x=>src&&x.name.toLowerCase().replace(/\.com$|\s.*$/,'')===src&&x.name!=='Google Hotels')||HOTEL_SITES[0];
+    return {site:s.name,url:s.url({...o,city:[p.name,o.city].filter(Boolean).join(', '),stars:''})};
+  },
   live(props,nights,budget){
     const max=+budget||0;
     return this.pick(props,'both',nights,24).filter(p=>!max||p.noPrice||(p.night||p.tot/nights)<=max);

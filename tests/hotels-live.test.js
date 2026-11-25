@@ -27,3 +27,20 @@ test('nothing in, nothing out', () => {
   assert.deepStrictEqual(Array.from(STAYS.live([], 2, '')), []);
   assert.deepStrictEqual(Array.from(STAYS.live(null, 2, '100')), []);
 });
+
+test('Book opens the site with the cheapest price, for this place and these dates', () => {
+  const { STAYS } = load('airports.js', 'common.js', 'stays.js');
+  const o = { city: 'Lisbon', ci: '2027-03-01', co: '2027-03-04', adults: 2, children: 0, rooms: 1 };
+  const agoda = STAYS.book({ name: 'Cheap Inn', source: 'Agoda.com' }, o);
+  assert.equal(agoda.site, 'Agoda');
+  assert.match(agoda.url, /^https:\/\/www\.agoda\.com\/search\?textToSearch=Cheap%20Inn%2C%20Lisbon&checkIn=2027-03-01&los=3&rooms=1&adults=2/);
+  const exp = STAYS.book({ name: 'Mid Hotel', source: 'Expedia' }, o);
+  assert.equal(exp.site, 'Expedia');
+  assert.match(exp.url, /destination=Mid%20Hotel%2C%20Lisbon&startDate=2027-03-01&endDate=2027-03-04/);
+  // an unknown or missing source falls back to Booking.com, still with the place and dates
+  for (const source of ['Trip.com', null]) {
+    const b = STAYS.book({ name: 'Posh Palace', source }, o);
+    assert.equal(b.site, 'Booking.com');
+    assert.match(b.url, /ss=Posh%20Palace%2C%20Lisbon&checkin=2027-03-01&checkout=2027-03-04&group_adults=2/);
+  }
+});
