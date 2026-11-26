@@ -144,6 +144,7 @@ main{position:relative;z-index:3}
 .frow .w-date{flex:1 1 160px;max-width:240px}   /* "23-Dec-2026" and the calendar icon fit */
 .frow .w-flex{flex:2.2 1 300px}
 .frow .w-small{flex:1 1 100px}
+.frow .w-cabin{flex-basis:150px}                  /* "Premium eco." and the arrow fit */
 .frow .w-ms{flex:1.6 1 170px}
 .frow .swap{flex:0 0 52px;align-self:flex-end}
 .frow.foot{align-items:center;gap:6px 24px}
@@ -706,7 +707,16 @@ html[data-theme="dark"] .hero.photo{background-color:#000;background-image:var(-
 /* inner pages use the home hero exactly: same photo, same height, same type position */
 .hero.small.photo{min-height:480px;padding-top:144px;box-sizing:border-box}
 @media (max-width:560px){.hero.small.photo{min-height:440px;padding-top:104px}}   /* phone: the trip card shows on the first screen */
-@media (max-width:380px){.nav ul a.link span{display:none}.nav ul a.link{padding:6px 9px}}
+@media (max-width:380px){
+  .nav ul a.link span{display:none}.nav ul a.link,.nav ul a.link:not(.active){padding:6px 6px}   /* 320px phones: all six pages and the theme button fit */
+  .card{padding:20px 16px}
+  input,select,textarea{padding-left:11px;padding-right:11px}   /* "NUE — Nuremberg, Germany" fits */
+}
+/* phone turned sideways: a short hero so the trip card starts on the first screen */
+@media (max-height:500px) and (orientation:landscape){
+  .hero.small.photo{min-height:0;padding-top:76px}
+  .hero.small h1{font-size:2rem}
+}
 
 /* ---------- phone: touch sizes and tight spots ---------- */
 @media (max-width:560px){

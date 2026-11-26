@@ -48,8 +48,8 @@ def start_server():
     sys.exit('server.js did not start')
 
 
-def new_page(browser, base, width, storage=None):
-    ctx = browser.new_context(viewport={'width': width, 'height': 900})
+def new_page(browser, base, width, storage=None, height=900):
+    ctx = browser.new_context(viewport={'width': width, 'height': height})
     if not LIVE:   # only this site: no live prices, weather or maps, so the checks do not depend on the network
         ctx.route('**/*', lambda r: r.continue_() if r.request.url.startswith(base) else r.abort())
     if storage:
@@ -156,6 +156,32 @@ def trip_cost(browser, base):
     ctx.close()
 
 
+# small and short screens: the smallest Android phone (320 wide) and a phone turned sideways (844 x 390)
+def small_screens(browser, base):
+    for pg in PAGES:
+        ctx, page = new_page(browser, base, 320, height=640)
+        page.goto(f'{base}/{pg}')
+        cut = page.evaluate("(() => { const u = document.querySelector('.nav ul'); return u.scrollWidth - u.clientWidth; })()")
+        check(f'{pg} @ 320: every menu item and the theme button fit', cut <= 1, f'{cut}px cut off')
+        ctx.close()
+    ctx, page = new_page(browser, base, 320, height=640)
+    page.goto(f'{base}/index.html')
+    fit = page.evaluate("(() => { const i = document.querySelector('#f input[name=from]') || document.querySelector('.w-from input'); return i.scrollWidth - i.clientWidth; })()")
+    check('index.html @ 320: "NUE — Nuremberg, Germany" fits its field', fit <= 1, f'{fit}px cut off')
+    ctx.close()
+    ctx, page = new_page(browser, base, 844, height=390)
+    for pg in ['index.html', 'bus.html', 'train.html', 'hotels.html']:
+        page.goto(f'{base}/{pg}')
+        top = page.evaluate("document.querySelector('main .card, .lift .card, .card').getBoundingClientRect().top")
+        check(f'{pg} @ phone sideways: the first card starts on the first screen', top < 390 - 60, f'card top {round(top)}')
+    page.goto(f'{base}/index.html')
+    room = page.evaluate("""(() => { const s = document.querySelector('select[name=cabin]'); s.value = 'premium_economy';
+        const c = document.createElement('canvas').getContext('2d'), st = getComputedStyle(s); c.font = st.font;
+        return s.clientWidth - c.measureText(s.options[s.selectedIndex].text).width - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight) - 20; })()""")
+    check('index.html @ phone sideways: Cabin shows "Premium eco." in full', room >= 0, f'{round(room)}px short')
+    ctx.close()
+
+
 def live_searches(browser, base):
     ctx, page = new_page(browser, base, WIDTHS['desktop'])
     page.goto(f'{base}/index.html?trip=mc')
@@ -203,6 +229,7 @@ def main():
             flights_form(browser, base)
             search_button_end(browser, base)
             trip_cost(browser, base)
+            small_screens(browser, base)
             if LIVE:
                 live_searches(browser, base)
             browser.close()
